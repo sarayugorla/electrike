@@ -5,6 +5,9 @@ const KEYS = {
   VEHICLES: '@electrike_vehicles',
   TRIPS: '@electrike_trips',
   SETTINGS: '@electrike_settings',
+  BATTERY: '@electrike_battery',
+  ACTIVE_VEHICLE_ID: '@electrike_active_vehicle_id',
+  STATION_REVIEWS: '@electrike_station_reviews',
 };
 
 // Default initial profile
@@ -17,7 +20,7 @@ export const DEFAULT_PROFILE = {
   numberPlate: 'KA 01 EV 2026',
 };
 
-// Default initial vehicles list
+// Default initial vehicles list (only ONE active by default)
 export const DEFAULT_VEHICLES = [
   {
     id: 'v1',
@@ -28,6 +31,7 @@ export const DEFAULT_VEHICLES = [
     numberPlate: 'KA 01 EV 2026',
     batteryPercentage: 84,
     batteryCapacityKwh: 40.5,
+    isActive: true,
   },
   {
     id: 'v2',
@@ -38,6 +42,7 @@ export const DEFAULT_VEHICLES = [
     numberPlate: 'KA 05 EQ 8899',
     batteryPercentage: 92,
     batteryCapacityKwh: 3.7,
+    isActive: false,
   },
   {
     id: 'v3',
@@ -48,6 +53,7 @@ export const DEFAULT_VEHICLES = [
     numberPlate: 'KA 03 ET 4411',
     batteryPercentage: 68,
     batteryCapacityKwh: 7.37,
+    isActive: false,
   },
 ];
 
@@ -87,8 +93,18 @@ export async function getVehicles() {
   try {
     const raw = await AsyncStorage.getItem(KEYS.VEHICLES);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure at least one vehicle is active
+        const hasActive = parsed.some((v) => v.isActive);
+        if (!hasActive) {
+          parsed[0].isActive = true;
+          await AsyncStorage.setItem(KEYS.VEHICLES, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     }
+    await AsyncStorage.setItem(KEYS.VEHICLES, JSON.stringify(DEFAULT_VEHICLES));
     return DEFAULT_VEHICLES;
   } catch (error) {
     console.error('Error reading vehicles from AsyncStorage:', error);
@@ -110,6 +126,46 @@ export async function saveVehicles(vehicles) {
 }
 
 /**
+ * Set active vehicle by ID (ensuring strictly only ONE vehicle is active)
+ */
+export async function setActiveVehicle(vehicleId) {
+  try {
+    const current = await getVehicles();
+    let selectedVehicle = null;
+
+    const updated = current.map((v) => {
+      const isTarget = v.id === vehicleId || v.numberPlate === vehicleId;
+      if (isTarget) selectedVehicle = v;
+      return {
+        ...v,
+        isActive: isTarget,
+      };
+    });
+
+    if (selectedVehicle) {
+      await saveVehicles(updated);
+      await AsyncStorage.setItem(KEYS.ACTIVE_VEHICLE_ID, selectedVehicle.id);
+
+      // Sync active vehicle to profile
+      const profile = await getProfile();
+      const updatedProfile = {
+        ...profile,
+        vehicleType: selectedVehicle.type,
+        vehicleMake: selectedVehicle.make,
+        vehicleModel: selectedVehicle.model,
+        numberPlate: selectedVehicle.numberPlate,
+      };
+      await saveProfile(updatedProfile);
+    }
+
+    return updated;
+  } catch (error) {
+    console.error('Error setting active vehicle:', error);
+    return null;
+  }
+}
+
+/**
  * Add a new vehicle to the list
  */
 export async function addVehicle(vehicle) {
@@ -117,15 +173,121 @@ export async function addVehicle(vehicle) {
     const current = await getVehicles();
     const newVehicle = {
       id: `v_${Date.now()}`,
-      batteryPercentage: 100,
+      batteryPercentage: 90,
       batteryCapacityKwh: vehicle.type === 'Car' ? 35 : vehicle.type === 'Auto' ? 8 : 4,
+      isActive: false, // Newly added vehicle is not active by default unless it's the only one
       ...vehicle,
     };
+
+    if (current.length === 0) {
+      newVehicle.isActive = true;
+    }
+
     const updated = [newVehicle, ...current];
     await saveVehicles(updated);
     return updated;
   } catch (error) {
     console.error('Error adding vehicle to AsyncStorage:', error);
+    return null;
+  }
+}
+
+/**
+ * Delete a vehicle by ID.
+ * If the active vehicle is removed, automatically select the first remaining vehicle.
+ */
+export async function deleteVehicle(vehicleId) {
+  try {
+    const current = await getVehicles();
+    if (current.length <= 1) {
+      // Cannot delete the only vehicle
+      return { success: false, message: 'You must have at least one vehicle in your garage.' };
+    }
+
+    const targetVehicle = current.find((v) => v.id === vehicleId);
+    const updated = current.filter((v) => v.id !== vehicleId);
+
+    // If target was active, make the first remaining vehicle active
+    if (targetVehicle && targetVehicle.isActive && updated.length > 0) {
+      updated[0].isActive = true;
+      // Sync to profile
+      const profile = await getProfile();
+      await saveProfile({
+        ...profile,
+        vehicleType: updated[0].type,
+        vehicleMake: updated[0].make,
+        vehicleModel: updated[0].model,
+        numberPlate: updated[0].numberPlate,
+      });
+      await AsyncStorage.setItem(KEYS.ACTIVE_VEHICLE_ID, updated[0].id);
+    }
+
+    await saveVehicles(updated);
+    return { success: true, vehicles: updated };
+  } catch (error) {
+    console.error('Error deleting vehicle from AsyncStorage:', error);
+    return { success: false, message: 'Failed to delete vehicle.' };
+  }
+}
+
+/**
+ * Battery State Management (persists across screens & app reloads)
+ */
+export async function getBattery() {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.BATTERY);
+    if (raw !== null) {
+      const val = parseInt(raw, 10);
+      if (!isNaN(val) && val >= 0 && val <= 100) {
+        return val;
+      }
+    }
+    return 84; // Default initial battery
+  } catch (error) {
+    console.error('Error reading battery from AsyncStorage:', error);
+    return 84;
+  }
+}
+
+export async function saveBattery(percentage) {
+  try {
+    const val = Math.max(0, Math.min(100, Math.round(percentage)));
+    await AsyncStorage.setItem(KEYS.BATTERY, val.toString());
+    return val;
+  } catch (error) {
+    console.error('Error saving battery to AsyncStorage:', error);
+    return percentage;
+  }
+}
+
+/**
+ * Station Reviews Persistence
+ */
+export async function getStationReviews(stationId) {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.STATION_REVIEWS);
+    if (raw) {
+      const allReviews = JSON.parse(raw);
+      return allReviews[stationId] || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error reading station reviews:', error);
+    return [];
+  }
+}
+
+export async function saveStationReview(stationId, review) {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.STATION_REVIEWS);
+    const allReviews = raw ? JSON.parse(raw) : {};
+    const existing = allReviews[stationId] || [];
+    const updated = [review, ...existing];
+    allReviews[stationId] = updated;
+    await AsyncStorage.setItem(KEYS.STATION_REVIEWS, JSON.stringify(allReviews));
+    return updated;
+  } catch (error) {
+    console.error('Error saving station review:', error);
     return null;
   }
 }
@@ -172,7 +334,13 @@ export default {
   saveProfile,
   getVehicles,
   saveVehicles,
+  setActiveVehicle,
   addVehicle,
+  deleteVehicle,
+  getBattery,
+  saveBattery,
+  getStationReviews,
+  saveStationReview,
   getTrips,
   saveTrip,
   DEFAULT_PROFILE,

@@ -10,8 +10,10 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getProfile, saveProfile } from '../storage/storage';
+import BatteryIndicator from '../components/BatteryIndicator';
 
 const VEHICLE_TYPES = [
   { id: 'Car', label: 'Car', icon: 'car-outline' },
@@ -20,6 +22,8 @@ const VEHICLE_TYPES = [
 ];
 
 export default function LoginScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+
   const [name, setName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [vehicleType, setVehicleType] = useState('Car');
@@ -93,12 +97,21 @@ export default function LoginScreen({ navigation }) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* Top Header Bar with Safe-Area aware Battery Indicator */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
+        <View style={styles.topBarBrand}>
+          <Ionicons name="flash" size={18} color="#10B981" />
+          <Text style={styles.topBarBrandText}>ELECTRIKE</Text>
+        </View>
+        <BatteryIndicator />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand Header */}
+        {/* Brand Hero */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
             <Ionicons name="flash" size={32} color="#10B981" />
@@ -142,7 +155,7 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Vehicle Type Selector */}
+          {/* Vehicle Type Selector (Refreshed without neon yellow) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Vehicle Type</Text>
             <View style={styles.vehicleTypeRow}>
@@ -162,13 +175,13 @@ export default function LoginScreen({ navigation }) {
                       <MaterialCommunityIcons
                         name="rickshaw"
                         size={22}
-                        color={isSelected ? '#0F172A' : '#64748B'}
+                        color={isSelected ? '#065F46' : '#64748B'}
                       />
                     ) : (
                       <Ionicons
                         name={v.icon}
                         size={22}
-                        color={isSelected ? '#0F172A' : '#64748B'}
+                        color={isSelected ? '#065F46' : '#64748B'}
                       />
                     )}
                     <Text
@@ -233,13 +246,13 @@ export default function LoginScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.continueButton, loading && styles.continueButtonDisabled]}
             onPress={handleContinue}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             disabled={loading}
           >
             <Text style={styles.continueButtonText}>
               {loading ? 'Saving Profile...' : 'Continue to Route Planning'}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color="#0F172A" />
+            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
@@ -256,37 +269,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  topBarBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  topBarBrandText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 1,
+  },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
     shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     color: '#0F172A',
     letterSpacing: 1.5,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     marginTop: 4,
   },
@@ -296,27 +330,27 @@ const styles = StyleSheet.create({
     padding: 20,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 3,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   sectionHeading: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 18,
+    marginBottom: 16,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   row: {
     flexDirection: 'row',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#475569',
     marginBottom: 6,
   },
@@ -335,7 +369,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#0F172A',
     height: '100%',
   },
@@ -357,30 +391,30 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   vehicleTypeButtonActive: {
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
   },
   vehicleTypeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
   },
   vehicleTypeTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: '#065F46',
+    fontWeight: '800',
   },
   continueButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#0F172A',
     borderRadius: 14,
     paddingVertical: 15,
     marginTop: 10,
-    shadowColor: '#10B981',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -388,15 +422,15 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   continueButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   footerNote: {
     textAlign: 'center',
     fontSize: 12,
     color: '#94A3B8',
-    marginTop: 20,
+    marginTop: 18,
     paddingHorizontal: 20,
     lineHeight: 18,
   },

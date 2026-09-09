@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { INITIAL_MOCK_TRIPS } from '../data/mockData';
@@ -41,7 +40,7 @@ export default function ActivityScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -54,7 +53,7 @@ export default function ActivityScreen({ navigation }) {
             </View>
             <View>
               <Text style={styles.summaryTitle}>Eco Trip Activity</Text>
-              <Text style={styles.summarySubtitle}>Logged EV corridors & energy stats</Text>
+              <Text style={styles.summarySubtitle}>Logged EV corridors & thermal savings</Text>
             </View>
           </View>
 
@@ -86,7 +85,7 @@ export default function ActivityScreen({ navigation }) {
                 <Text style={styles.dateText}>{trip.date}</Text>
               </View>
               <View style={styles.vehicleBadge}>
-                <MaterialCommunityIcons name="car-electric" size={14} color="#0F172A" />
+                <MaterialCommunityIcons name="car-electric" size={14} color="#059669" />
                 <Text style={styles.vehicleText}>{trip.vehicle}</Text>
               </View>
             </View>
@@ -128,21 +127,21 @@ export default function ActivityScreen({ navigation }) {
               )}
             </View>
 
-            {/* Action Row: Use Again */}
+            {/* Action Row: Use Again (Restyled without neon yellow) */}
             <View style={styles.tripActionRow}>
               <TouchableOpacity
                 style={styles.useAgainButton}
                 onPress={() => handleUseAgain(trip)}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <Ionicons name="repeat" size={16} color="#0F172A" />
+                <Ionicons name="repeat" size={16} color="#FFFFFF" />
                 <Text style={styles.useAgainText}>Use Again</Text>
               </TouchableOpacity>
             </View>
           </View>
         ))}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -213,7 +212,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
     marginBottom: 12,
   },
@@ -244,21 +243,23 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     color: '#64748B',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   vehicleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   vehicleText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#065F46',
   },
   routeLocationsBlock: {
     marginBottom: 12,
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
   },
   locationRole: {
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#94A3B8',
     letterSpacing: 0.5,
   },
@@ -314,7 +315,7 @@ const styles = StyleSheet.create({
   metaStatText: {
     fontSize: 12,
     color: '#64748B',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   tripActionRow: {
     flexDirection: 'row',
@@ -324,19 +325,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#0F172A',
     paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-    shadowColor: '#10B981',
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   useAgainText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

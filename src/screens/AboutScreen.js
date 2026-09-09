@@ -4,13 +4,12 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AboutScreen() {
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -60,13 +59,19 @@ export default function AboutScreen() {
             <View style={styles.bulletItem}>
               <Ionicons name="checkmark-circle" size={16} color="#10B981" style={styles.bulletIcon} />
               <Text style={styles.bulletText}>
-                <Text style={styles.bold}>Accurate Range Analytics:</Text> Vehicle-specific battery remaining calculations upon destination arrival.
+                <Text style={styles.bold}>Single-Corridor Focus:</Text> Dedicated optimal path tailored directly to your chosen priority.
               </Text>
             </View>
             <View style={styles.bulletItem}>
               <Ionicons name="checkmark-circle" size={16} color="#10B981" style={styles.bulletIcon} />
               <Text style={styles.bulletText}>
-                <Text style={styles.bold}>Dead Reckoning Mode:</Text> Continuity navigation when GPS signals fade in tunnels or dense corridors.
+                <Text style={styles.bold}>Community Charging Reviews:</Text> Real-time 1–5 star driver feedback on charging speeds and charger availability.
+              </Text>
+            </View>
+            <View style={styles.bulletItem}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" style={styles.bulletIcon} />
+              <Text style={styles.bulletText}>
+                <Text style={styles.bold}>Roadside Emergency Assist:</Text> Instant dispatch telemetry with live coordinates and vehicle battery telemetry.
               </Text>
             </View>
           </View>
@@ -128,24 +133,13 @@ export default function AboutScreen() {
           </Text>
         </View>
 
-        {/* Section 6: Why Electrike? */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="shield-checkmark-outline" size={22} color="#10B981" />
-            <Text style={styles.sectionTitle}>Why Electrike?</Text>
-          </View>
-          <Text style={styles.sectionBody}>
-            Electric vehicles have distinct dynamics: high ambient heat degrades range, charging speeds vary with battery temperature, and charging station uptime is crucial. Electrike bridges these gaps to deliver a seamless, anxiety-free electric mobility experience.
-          </Text>
-        </View>
-
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>© 2026 Electrike Technologies. All rights reserved.</Text>
           <Text style={styles.footerSub}>Engineered for the Sustainable Mobility Era</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -181,7 +175,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 1.5,
   },
@@ -200,12 +194,12 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#10B981',
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -224,7 +218,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
   sectionBody: {
@@ -260,14 +254,14 @@ const styles = StyleSheet.create({
   },
   prefBox: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   prefBoxTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#059669',
   },
   prefBoxDesc: {

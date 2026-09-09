@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,22 +7,27 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  SafeAreaView,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ROUTE_PREFERENCES } from '../data/mockData';
-import { getProfile, getVehicles } from '../storage/storage';
+import { getProfile, getVehicles, setActiveVehicle } from '../storage/storage';
+import BatteryIndicator from '../components/BatteryIndicator';
+import { useBattery } from '../context/BatteryContext';
 
 export default function RoutePlanningScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
+  const { batteryPercentage } = useBattery();
+
   // Navigation Menu Modal State
   const [menuVisible, setMenuVisible] = useState(false);
 
   // Profile & Vehicle State
-  const [currentProfile, setCurrentProfile] = useState(null);
   const [vehiclesList, setVehiclesList] = useState([]);
-  const [selectedVehicle, setSelectedVehicle] = useState('Tata Nexon EV Max');
-  const [batteryPercentage, setBatteryPercentage] = useState(84);
+  const [activeVehicle, setActiveVehicleState] = useState(null);
+  const [selectedVehicleName, setSelectedVehicleName] = useState('Tata Nexon EV Max');
   const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
 
   // Trip Inputs
@@ -33,10 +38,12 @@ export default function RoutePlanningScreen({ navigation, route }) {
   // Route Preference (Default: Saved Places)
   const [selectedPreference, setSelectedPreference] = useState(ROUTE_PREFERENCES.SAVED_PLACES);
 
-  // Load profile, vehicles, or params from route (e.g. "Use Again" from Activity)
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  // Reload vehicles and profile whenever screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
 
   useEffect(() => {
     if (route.params) {
@@ -44,7 +51,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
       if (route.params.prefillDestination) setDestination(route.params.prefillDestination);
       if (route.params.prefillStops) setIntermediateStops(route.params.prefillStops);
       if (route.params.prefillPreference) setSelectedPreference(route.params.prefillPreference);
-      if (route.params.prefillVehicle) setSelectedVehicle(route.params.prefillVehicle);
+      if (route.params.prefillVehicle) setSelectedVehicleName(route.params.prefillVehicle);
     }
   }, [route.params]);
 
@@ -52,21 +59,21 @@ export default function RoutePlanningScreen({ navigation, route }) {
     try {
       const profile = await getProfile();
       const vehicles = await getVehicles();
-      if (profile) {
-        setCurrentProfile(profile);
-        if (!route.params?.prefillVehicle && profile.vehicleMake && profile.vehicleModel) {
-          setSelectedVehicle(`${profile.vehicleMake} ${profile.vehicleModel}`);
-        }
-      }
+
       if (vehicles && vehicles.length > 0) {
         setVehiclesList(vehicles);
-        const match = vehicles.find((v) => `${v.make} ${v.model}` === selectedVehicle);
-        if (match) {
-          setBatteryPercentage(match.batteryPercentage || 84);
+        // Find explicitly active vehicle
+        const active = vehicles.find((v) => v.isActive) || vehicles[0];
+        setActiveVehicleState(active);
+        const name = active.name || `${active.make} ${active.model}`;
+        if (!route.params?.prefillVehicle) {
+          setSelectedVehicleName(name);
         }
+      } else if (profile && profile.vehicleMake) {
+        setSelectedVehicleName(`${profile.vehicleMake} ${profile.vehicleModel}`);
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Error loading user data in RoutePlanning:', error);
     }
   };
 
@@ -92,12 +99,14 @@ export default function RoutePlanningScreen({ navigation, route }) {
     setIntermediateStops(updated);
   };
 
-  // Select Vehicle from modal
-  const handleSelectVehicle = (vehicle) => {
+  // Switch Active Vehicle from dropdown modal
+  const handleSelectVehicle = async (vehicle) => {
     const vName = vehicle.name || `${vehicle.make} ${vehicle.model}`;
-    setSelectedVehicle(vName);
-    setBatteryPercentage(vehicle.batteryPercentage || 84);
+    setSelectedVehicleName(vName);
+    setActiveVehicleState(vehicle);
+    await setActiveVehicle(vehicle.id);
     setVehicleModalVisible(false);
+    await loadUserData();
   };
 
   // Find Routes
@@ -118,7 +127,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
       destination: destination.trim(),
       stops: filteredStops,
       preference: selectedPreference,
-      vehicle: selectedVehicle,
+      vehicle: selectedVehicleName,
       batteryPercentage,
     });
   };
@@ -156,40 +165,45 @@ export default function RoutePlanningScreen({ navigation, route }) {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
-      <View style={styles.topBar}>
+    <View style={styles.container}>
+      {/* Top App Bar with safe-area handling:
+          LEFT: Hamburger menu
+          CENTER / NEAR LEFT: Active vehicle dropdown pill
+          RIGHT: Editable battery indicator
+      */}
+      <View
+        style={[
+          styles.topBar,
+          {
+            paddingTop: Math.max(insets.top, 12) + 8,
+          },
+        ]}
+      >
         {/* Hamburger Menu Icon */}
         <TouchableOpacity
           style={styles.iconButton}
           onPress={() => setMenuVisible(true)}
           activeOpacity={0.7}
+          accessibilityLabel="Open Navigation Menu"
         >
-          <Ionicons name="menu" size={26} color="#0F172A" />
+          <Ionicons name="menu" size={24} color="#0F172A" />
         </TouchableOpacity>
 
-        {/* Vehicle Selector Pill */}
+        {/* Active Vehicle Selector Pill (Restyled in cool blue/green, no neon yellow) */}
         <TouchableOpacity
           style={styles.vehiclePill}
           onPress={() => setVehicleModalVisible(true)}
           activeOpacity={0.8}
         >
-          <MaterialCommunityIcons name="car-electric" size={18} color="#0F172A" />
+          <MaterialCommunityIcons name="car-electric" size={17} color="#059669" />
           <Text style={styles.vehiclePillText} numberOfLines={1}>
-            {selectedVehicle}
+            {selectedVehicleName}
           </Text>
-          <Ionicons name="chevron-down" size={14} color="#0F172A" />
+          <Ionicons name="chevron-down" size={14} color="#059669" />
         </TouchableOpacity>
 
-        {/* Current Battery Percentage Badge */}
-        <View style={styles.batteryBadge}>
-          <Ionicons
-            name={batteryPercentage > 20 ? 'battery-charging' : 'battery-dead'}
-            size={18}
-            color={batteryPercentage > 20 ? '#10B981' : '#EF4444'}
-          />
-          <Text style={styles.batteryText}>{batteryPercentage}%</Text>
-        </View>
+        {/* Editable Battery Indicator */}
+        <BatteryIndicator />
       </View>
 
       <ScrollView
@@ -201,11 +215,11 @@ export default function RoutePlanningScreen({ navigation, route }) {
         <View style={styles.headerSection}>
           <Text style={styles.pageTitle}>Plan Your EV Journey</Text>
           <Text style={styles.pageSubtitle}>
-            Smart thermal & tariff-aware route calculation
+            Thermal-aware routing, canopy shade & tariff optimization
           </Text>
         </View>
 
-        {/* Trip Inputs Card */}
+        {/* Trip Locations Card */}
         <View style={styles.tripCard}>
           <Text style={styles.cardHeaderTitle}>Route Locations</Text>
 
@@ -227,19 +241,26 @@ export default function RoutePlanningScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* Intermediate Stops */}
+          {/* Intermediate Stops (Clean blue/green palette, NO orange) */}
           {intermediateStops.map((stop, index) => (
             <View key={`stop_${index}`} style={styles.locationRow}>
               <View style={styles.iconContainer}>
-                <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
+                <View style={[styles.dot, { backgroundColor: '#0284C7' }]} />
                 <View style={styles.verticalConnector} />
               </View>
               <View style={styles.inputFlex}>
-                <Text style={styles.locationLabel}>Stop {index + 1}</Text>
+                <View style={styles.stopHeaderRow}>
+                  <Text style={[styles.locationLabel, { color: '#0284C7' }]}>
+                    Stop {index + 1}
+                  </Text>
+                  <View style={styles.stopBadge}>
+                    <Text style={styles.stopBadgeText}>Intermediate</Text>
+                  </View>
+                </View>
                 <View style={styles.stopInputWrapper}>
                   <TextInput
-                    style={[styles.locationInput, { flex: 1 }]}
-                    placeholder={`Intermediate stop ${index + 1}`}
+                    style={[styles.locationInput, styles.stopInput]}
+                    placeholder={`Intermediate stop ${index + 1} (e.g. charging/rest)`}
                     placeholderTextColor="#94A3B8"
                     value={stop}
                     onChangeText={(text) => handleUpdateStop(text, index)}
@@ -247,8 +268,9 @@ export default function RoutePlanningScreen({ navigation, route }) {
                   <TouchableOpacity
                     onPress={() => handleRemoveStop(index)}
                     style={styles.removeStopBtn}
+                    accessibilityLabel={`Remove stop ${index + 1}`}
                   >
-                    <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                    <Ionicons name="close-circle" size={20} color="#64748B" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -262,7 +284,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
               onPress={handleAddStop}
               activeOpacity={0.7}
             >
-              <Ionicons name="add-circle-outline" size={18} color="#059669" />
+              <Ionicons name="add-circle" size={17} color="#059669" />
               <Text style={styles.addStopButtonText}>
                 + Add Stop ({intermediateStops.length}/3)
               </Text>
@@ -291,7 +313,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
         <View style={styles.preferenceSection}>
           <Text style={styles.sectionTitle}>Route Preference</Text>
           <Text style={styles.sectionSub}>
-            Select your optimization criteria for this trip
+            Select optimization criteria for your single navigation corridor
           </Text>
 
           <View style={styles.preferenceGrid}>
@@ -316,8 +338,8 @@ export default function RoutePlanningScreen({ navigation, route }) {
                     >
                       <Ionicons
                         name={opt.icon}
-                        size={22}
-                        color={isSelected ? '#0F172A' : '#10B981'}
+                        size={20}
+                        color={isSelected ? '#059669' : '#475569'}
                       />
                     </View>
                     <View
@@ -349,7 +371,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
 
                   {isSelected && (
                     <View style={styles.activeCheckmark}>
-                      <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                      <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -364,7 +386,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
           onPress={handleFindRoutes}
           activeOpacity={0.85}
         >
-          <Ionicons name="navigate" size={22} color="#0F172A" />
+          <Ionicons name="navigate" size={20} color="#FFFFFF" />
           <Text style={styles.findRoutesButtonText}>Find Routes</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -381,13 +403,20 @@ export default function RoutePlanningScreen({ navigation, route }) {
           activeOpacity={1}
           onPress={() => setMenuVisible(false)}
         >
-          <View style={styles.drawerContainer}>
+          <View
+            style={[
+              styles.drawerContainer,
+              { paddingTop: Math.max(insets.top, 20) + 16 },
+            ]}
+          >
             <View style={styles.drawerHeader}>
               <View style={styles.drawerBrand}>
-                <Ionicons name="flash" size={24} color="#10B981" />
+                <View style={styles.drawerLogoWrap}>
+                  <Ionicons name="flash" size={20} color="#10B981" />
+                </View>
                 <Text style={styles.drawerBrandText}>ELECTRIKE</Text>
               </View>
-              <TouchableOpacity onPress={() => setMenuVisible(false)}>
+              <TouchableOpacity onPress={() => setMenuVisible(false)} style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
@@ -402,9 +431,12 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 }}
               >
                 <View style={styles.drawerItemIcon}>
-                  <Ionicons name="person-circle-outline" size={24} color="#0F172A" />
+                  <Ionicons name="person-circle-outline" size={24} color="#059669" />
                 </View>
-                <Text style={styles.drawerItemText}>Profile</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.drawerItemText}>Driver Profile & Garage</Text>
+                  <Text style={styles.drawerItemSub}>Manage EV specs & vehicles</Text>
+                </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
@@ -417,9 +449,12 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 }}
               >
                 <View style={styles.drawerItemIcon}>
-                  <Ionicons name="time-outline" size={24} color="#0F172A" />
+                  <Ionicons name="time-outline" size={24} color="#0284C7" />
                 </View>
-                <Text style={styles.drawerItemText}>Activity</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.drawerItemText}>Trip Activity</Text>
+                  <Text style={styles.drawerItemSub}>Past routes & CO₂ savings</Text>
+                </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
@@ -434,14 +469,17 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 <View style={styles.drawerItemIcon}>
                   <Ionicons name="information-circle-outline" size={24} color="#0F172A" />
                 </View>
-                <Text style={styles.drawerItemText}>About</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.drawerItemText}>About Electrike</Text>
+                  <Text style={styles.drawerItemSub}>Thermal tech & app details</Text>
+                </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.drawerFooter}>
-              <Text style={styles.drawerFooterVersion}>Electrike v1.0.0</Text>
-              <Text style={styles.drawerFooterSub}>Eco EV Intelligent Routing</Text>
+              <Text style={styles.drawerFooterVersion}>Electrike EV Navigator v1.0</Text>
+              <Text style={styles.drawerFooterSub}>Intelligent Thermal-Aware Routing</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -461,12 +499,15 @@ export default function RoutePlanningScreen({ navigation, route }) {
         >
           <View style={styles.vehicleSheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Select Active Vehicle</Text>
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Active Vehicle</Text>
+              <Text style={styles.sheetSub}>Only 1 vehicle active at a time</Text>
+            </View>
 
             <ScrollView style={{ maxHeight: 320 }}>
               {vehiclesList.map((v) => {
                 const name = v.name || `${v.make} ${v.model}`;
-                const isSelected = selectedVehicle === name;
+                const isSelected = v.isActive || selectedVehicleName === name;
                 return (
                   <TouchableOpacity
                     key={v.id || v.numberPlate}
@@ -476,14 +517,37 @@ export default function RoutePlanningScreen({ navigation, route }) {
                     ]}
                     onPress={() => handleSelectVehicle(v)}
                   >
-                    <View style={styles.vehicleOptionInfo}>
-                      <Text style={styles.vehicleOptionName}>{name}</Text>
-                      <Text style={styles.vehicleOptionSub}>
-                        {v.numberPlate} • {v.type} • {v.batteryPercentage || 84}% Battery
-                      </Text>
+                    <View style={styles.vehicleOptionLeft}>
+                      <View
+                        style={[
+                          styles.vehicleOptionIconWrap,
+                          isSelected && { backgroundColor: '#ECFDF5' },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            v.type === 'Scooty'
+                              ? 'bicycle'
+                              : v.type === 'Auto'
+                              ? 'rickshaw'
+                              : 'car-electric'
+                          }
+                          size={22}
+                          color={isSelected ? '#059669' : '#64748B'}
+                        />
+                      </View>
+                      <View style={styles.vehicleOptionInfo}>
+                        <Text style={styles.vehicleOptionName}>{name}</Text>
+                        <Text style={styles.vehicleOptionSub}>
+                          {v.numberPlate} • {v.type} • {v.batteryCapacityKwh || 35} kWh
+                        </Text>
+                      </View>
                     </View>
                     {isSelected && (
-                      <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                      <View style={styles.activePill}>
+                        <Ionicons name="checkmark" size={14} color="#059669" />
+                        <Text style={styles.activePillText}>Active</Text>
+                      </View>
                     )}
                   </TouchableOpacity>
                 );
@@ -498,12 +562,12 @@ export default function RoutePlanningScreen({ navigation, route }) {
               }}
             >
               <Ionicons name="settings-outline" size={18} color="#0F172A" />
-              <Text style={styles.manageVehiclesBtnText}>Manage Vehicles in Profile</Text>
+              <Text style={styles.manageVehiclesBtnText}>Manage Garage in Profile</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -517,46 +581,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+    zIndex: 10,
   },
   iconButton: {
-    padding: 6,
-    borderRadius: 8,
+    padding: 7,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
   },
   vehiclePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#CCFF00',
-    paddingHorizontal: 14,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
-    maxWidth: '55%',
+    maxWidth: '52%',
   },
   vehiclePillText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  batteryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  batteryText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '800',
+    color: '#065F46',
   },
   scrollContent: {
     padding: 16,
@@ -564,21 +620,24 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 16,
+    marginTop: 4,
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0F172A',
+    letterSpacing: -0.3,
   },
   pageSubtitle: {
     fontSize: 13,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 18,
   },
   tripCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
@@ -590,7 +649,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
     marginBottom: 14,
   },
@@ -621,21 +680,44 @@ const styles = StyleSheet.create({
   },
   locationLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#64748B',
-    marginBottom: 2,
+    marginBottom: 3,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  stopHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  stopBadge: {
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  stopBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
   },
   locationInput: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     fontSize: 14,
     color: '#0F172A',
+  },
+  stopInput: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#A7F3D0',
   },
   stopInputWrapper: {
     flexDirection: 'row',
@@ -644,6 +726,7 @@ const styles = StyleSheet.create({
   removeStopBtn: {
     position: 'absolute',
     right: 10,
+    padding: 4,
   },
   addStopButton: {
     flexDirection: 'row',
@@ -653,13 +736,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignSelf: 'flex-start',
     marginLeft: 34,
-    marginVertical: 4,
+    marginVertical: 6,
     backgroundColor: '#ECFDF5',
-    borderRadius: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   addStopButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '800',
     color: '#059669',
   },
   preferenceSection: {
@@ -667,7 +752,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
   sectionSub: {
@@ -706,12 +791,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
   prefIconWrapSelected: {
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   prefBadge: {
     paddingHorizontal: 8,
@@ -732,7 +819,7 @@ const styles = StyleSheet.create({
   },
   prefTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
   prefTitleSelected: {
@@ -754,33 +841,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#0F172A',
     borderRadius: 16,
     paddingVertical: 16,
-    shadowColor: '#10B981',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 5,
   },
   findRoutesButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'flex-start',
   },
   drawerContainer: {
-    width: '75%',
+    width: '78%',
+    maxWidth: 320,
     height: '100%',
     backgroundColor: '#FFFFFF',
     padding: 20,
-    paddingTop: 50,
     shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
+    shadowOffset: { width: 6, height: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 10,
@@ -789,21 +877,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 20,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   drawerBrand: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  drawerLogoWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   drawerBrandText: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+  },
+  closeBtn: {
+    padding: 4,
   },
   drawerItems: {
     gap: 8,
@@ -811,29 +910,35 @@ const styles = StyleSheet.create({
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 13,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   drawerItemIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   drawerItemText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0F172A',
+  },
+  drawerItemSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
   },
   drawerFooter: {
     marginTop: 'auto',
-    paddingTop: 20,
+    paddingTop: 18,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },
   drawerFooterVersion: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
   drawerFooterSub: {
@@ -843,7 +948,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
   vehicleSheet: {
@@ -852,29 +957,41 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   sheetHandle: {
-    width: 40,
+    width: 44,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#CBD5E1',
     alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeaderRow: {
     marginBottom: 16,
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 16,
+  },
+  sheetSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   vehicleOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 12,
+    padding: 13,
+    borderRadius: 14,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     marginBottom: 10,
   },
@@ -882,18 +999,46 @@ const styles = StyleSheet.create({
     borderColor: '#10B981',
     backgroundColor: '#F0FDF4',
   },
+  vehicleOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  vehicleOptionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
   vehicleOptionInfo: {
     flex: 1,
   },
   vehicleOptionName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0F172A',
   },
   vehicleOptionSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  activePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
   },
   manageVehiclesBtn: {
     flexDirection: 'row',
@@ -902,12 +1047,12 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 13,
     marginTop: 10,
   },
   manageVehiclesBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F172A',
   },
 });

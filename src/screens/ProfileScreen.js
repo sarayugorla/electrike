@@ -18,6 +18,8 @@ import {
   getVehicles,
   saveVehicles,
   addVehicle,
+  setActiveVehicle,
+  deleteVehicle,
 } from '../storage/storage';
 
 const VEHICLE_TYPES = [
@@ -75,7 +77,7 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Save profile and primary vehicle changes
+  // Save profile and vehicle changes
   const handleSaveChanges = async () => {
     if (!name.trim() || !mobileNumber.trim()) {
       Alert.alert('Required Fields', 'Please enter your name and mobile number.');
@@ -99,9 +101,9 @@ export default function ProfileScreen({ navigation }) {
 
     const saved = await saveProfile(updatedProfile);
 
-    // Update the vehicle in vehicles list if matching
-    const updatedVehicles = vehicles.map((v, i) => {
-      if (i === 0 || v.numberPlate === updatedProfile.numberPlate) {
+    // Update active vehicle in garage list to reflect form edits
+    const updatedVehicles = vehicles.map((v) => {
+      if (v.isActive || v.numberPlate === updatedProfile.numberPlate) {
         return {
           ...v,
           type: updatedProfile.vehicleType,
@@ -119,10 +121,62 @@ export default function ProfileScreen({ navigation }) {
     setIsSaving(false);
 
     if (saved) {
-      Alert.alert('Success', 'Profile and vehicle information updated successfully!');
+      Alert.alert('Success', 'Profile and vehicle specs saved successfully!');
     } else {
       Alert.alert('Error', 'Failed to save changes.');
     }
+  };
+
+  // Select a single active vehicle (Only ONE active at a time)
+  const handleSelectActiveVehicle = async (veh) => {
+    const updated = await setActiveVehicle(veh.id);
+    if (updated) {
+      setVehicles(updated);
+      setVehicleType(veh.type || 'Car');
+      setVehicleMake(veh.make || '');
+      setVehicleModel(veh.model || '');
+      setNumberPlate(veh.numberPlate || '');
+    }
+  };
+
+  // Remove a vehicle from the garage (with confirmation & safe fallback)
+  const handleDeleteVehiclePrompt = (veh) => {
+    if (vehicles.length <= 1) {
+      Alert.alert(
+        'Cannot Delete',
+        'You must have at least one vehicle in your garage. Add another vehicle before removing this one.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Remove Vehicle',
+      `Are you sure you want to remove "${veh.name || veh.model}" (${veh.numberPlate}) from your garage?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await deleteVehicle(veh.id);
+            if (result.success) {
+              setVehicles(result.vehicles);
+              // Reload profile to reflect fallback active vehicle if necessary
+              const profile = await getProfile();
+              if (profile) {
+                setVehicleType(profile.vehicleType || 'Car');
+                setVehicleMake(profile.vehicleMake || '');
+                setVehicleModel(profile.vehicleModel || '');
+                setNumberPlate(profile.numberPlate || '');
+              }
+              Alert.alert('Vehicle Removed', 'The vehicle has been removed from your garage.');
+            } else {
+              Alert.alert('Error', result.message || 'Failed to remove vehicle.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Add new vehicle to the garage
@@ -139,6 +193,7 @@ export default function ProfileScreen({ navigation }) {
       model: newModel.trim(),
       numberPlate: newPlate.trim().toUpperCase(),
       batteryPercentage: 90,
+      batteryCapacityKwh: newType === 'Car' ? 40 : newType === 'Auto' ? 8 : 4,
     };
 
     const result = await addVehicle(vehicleObj);
@@ -154,14 +209,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Switch active primary vehicle form
-  const handleSelectVehicleCard = (v) => {
-    setVehicleType(v.type || 'Car');
-    setVehicleMake(v.make || '');
-    setVehicleModel(v.model || '');
-    setNumberPlate(v.numberPlate || '');
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -175,7 +222,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Profile Avatar Header */}
         <View style={styles.avatarHeader}>
           <View style={styles.avatarCircle}>
-            <Ionicons name="person" size={40} color="#10B981" />
+            <Ionicons name="person" size={38} color="#10B981" />
           </View>
           <Text style={styles.userName}>{name || 'Driver Profile'}</Text>
           <Text style={styles.userPhone}>{mobileNumber || '+91 - Registered EV Driver'}</Text>
@@ -215,14 +262,20 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Section: Active Vehicle Details */}
+        {/* Section: Active Vehicle Specifications */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>Active Vehicle Specs</Text>
-            <Text style={styles.badgeActive}>Primary</Text>
+            <View>
+              <Text style={styles.cardTitle}>Active Vehicle Specs</Text>
+              <Text style={styles.cardSub}>Synchronized with trip calculations</Text>
+            </View>
+            <View style={styles.badgeActive}>
+              <Ionicons name="checkmark-circle" size={13} color="#059669" />
+              <Text style={styles.badgeActiveText}>Active Spec</Text>
+            </View>
           </View>
 
-          {/* Vehicle Type Selector */}
+          {/* Vehicle Type Selector (Refreshed without neon yellow) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Vehicle Type</Text>
             <View style={styles.vehicleTypeRow}>
@@ -241,13 +294,13 @@ export default function ProfileScreen({ navigation }) {
                       <MaterialCommunityIcons
                         name="rickshaw"
                         size={20}
-                        color={isSelected ? '#0F172A' : '#64748B'}
+                        color={isSelected ? '#065F46' : '#64748B'}
                       />
                     ) : (
                       <Ionicons
                         name={v.icon}
                         size={20}
-                        color={isSelected ? '#0F172A' : '#64748B'}
+                        color={isSelected ? '#065F46' : '#64748B'}
                       />
                     )}
                     <Text
@@ -309,55 +362,83 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Section: Garage / Saved Vehicles */}
+        {/* Section: My EV Garage (Only 1 Active Vehicle Enforced, With Remove Functionality) */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>My EV Garage ({vehicles.length})</Text>
+            <View>
+              <Text style={styles.cardTitle}>My EV Garage ({vehicles.length})</Text>
+              <Text style={styles.cardSub}>Only one vehicle active at a time</Text>
+            </View>
             <TouchableOpacity
               style={styles.addVehicleSmallBtn}
               onPress={() => setAddVehicleModalVisible(true)}
             >
               <Ionicons name="add-circle" size={16} color="#059669" />
-              <Text style={styles.addVehicleSmallText}>+ Add Vehicle</Text>
+              <Text style={styles.addVehicleSmallText}>+ Add EV</Text>
             </TouchableOpacity>
           </View>
 
-          {vehicles.map((veh, index) => {
-            const isMatchingActive = veh.numberPlate === numberPlate;
+          {vehicles.map((veh) => {
+            const isActive = veh.isActive || veh.numberPlate === numberPlate;
             return (
-              <TouchableOpacity
-                key={veh.id || index}
+              <View
+                key={veh.id || veh.numberPlate}
                 style={[
-                  styles.garageItem,
-                  isMatchingActive && styles.garageItemActive,
+                  styles.garageCard,
+                  isActive && styles.garageCardActive,
                 ]}
-                onPress={() => handleSelectVehicleCard(veh)}
               >
-                <View style={styles.garageItemIconWrap}>
-                  <Ionicons
-                    name={
-                      veh.type === 'Scooty'
-                        ? 'bicycle'
-                        : veh.type === 'Auto'
-                        ? 'speedometer'
-                        : 'car'
-                    }
-                    size={22}
-                    color={isMatchingActive ? '#10B981' : '#64748B'}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.garageItemName}>{veh.name || `${veh.make} ${veh.model}`}</Text>
-                  <Text style={styles.garageItemSub}>
-                    {veh.numberPlate} • {veh.type}
-                  </Text>
-                </View>
-                {isMatchingActive && (
-                  <View style={styles.activeTag}>
-                    <Text style={styles.activeTagText}>Active</Text>
+                <TouchableOpacity
+                  style={styles.garageCardBody}
+                  onPress={() => handleSelectActiveVehicle(veh)}
+                  activeOpacity={0.8}
+                >
+                  <View
+                    style={[
+                      styles.garageIconWrap,
+                      isActive && { backgroundColor: '#ECFDF5' },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={
+                        veh.type === 'Scooty'
+                          ? 'bicycle'
+                          : veh.type === 'Auto'
+                          ? 'rickshaw'
+                          : 'car-electric'
+                      }
+                      size={24}
+                      color={isActive ? '#059669' : '#64748B'}
+                    />
                   </View>
-                )}
-              </TouchableOpacity>
+
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.garageCardTitleRow}>
+                      <Text style={styles.garageName}>{veh.name || `${veh.make} ${veh.model}`}</Text>
+                      {isActive ? (
+                        <View style={styles.activeBadge}>
+                          <Ionicons name="checkmark" size={12} color="#059669" />
+                          <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.tapToSelectText}>Tap to Activate</Text>
+                      )}
+                    </View>
+                    <Text style={styles.garageSub}>
+                      {veh.numberPlate} • {veh.type} • {veh.batteryCapacityKwh || 35} kWh battery
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Remove Vehicle Button */}
+                <TouchableOpacity
+                  style={styles.deleteVehicleBtn}
+                  onPress={() => handleDeleteVehiclePrompt(veh)}
+                  accessibilityLabel={`Remove ${veh.name} from garage`}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
             );
           })}
         </View>
@@ -369,9 +450,9 @@ export default function ProfileScreen({ navigation }) {
           disabled={isSaving}
           activeOpacity={0.85}
         >
-          <Ionicons name="save-outline" size={20} color="#0F172A" />
+          <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>
-            {isSaving ? 'Saving Changes...' : 'Save Changes'}
+            {isSaving ? 'Saving Changes...' : 'Save Profile & Vehicle'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -389,7 +470,7 @@ export default function ProfileScreen({ navigation }) {
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New EV</Text>
+              <Text style={styles.modalTitle}>Add EV to Garage</Text>
               <TouchableOpacity onPress={() => setAddVehicleModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
@@ -480,9 +561,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
@@ -505,7 +586,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -523,19 +604,30 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 14,
+  },
+  cardSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   badgeActive: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  badgeActiveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
   inputGroup: {
     marginBottom: 12,
@@ -545,7 +637,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#475569',
     marginBottom: 6,
   },
@@ -584,7 +676,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   vehicleTypeButtonActive: {
-    backgroundColor: '#CCFF00',
+    backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
   },
   vehicleTypeText: {
@@ -593,8 +685,8 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   vehicleTypeTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
+    color: '#065F46',
+    fontWeight: '800',
   },
   addVehicleSmallBtn: {
     flexDirection: 'row',
@@ -602,77 +694,110 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   addVehicleSmallText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#059669',
   },
-  garageItem: {
+  garageCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    marginBottom: 8,
+    marginBottom: 10,
+    overflow: 'hidden',
   },
-  garageItemActive: {
+  garageCardActive: {
     borderColor: '#10B981',
     backgroundColor: '#F0FDF4',
   },
-  garageItemIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  garageCardBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  garageIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  garageItemName: {
+  garageCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  garageName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
-  garageItemSub: {
+  garageSub: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
   },
-  activeTag: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  activeTagText: {
+  activeBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '800',
+    color: '#059669',
+  },
+  tapToSelectText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  deleteVehicleBtn: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E2E8F0',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#0F172A',
     borderRadius: 14,
     paddingVertical: 15,
     marginTop: 10,
-    shadowColor: '#10B981',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
   saveButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   modalOverlay: {
     flex: 1,
@@ -713,7 +838,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalSubmitBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0F172A',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -721,7 +846,7 @@ const styles = StyleSheet.create({
   },
   modalSubmitBtnText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

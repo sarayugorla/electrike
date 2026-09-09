@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -8,6 +9,7 @@ import MapScreen from '../screens/MapScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import AboutScreen from '../screens/AboutScreen';
+import BatteryIndicator from '../components/BatteryIndicator';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,12 +24,17 @@ export default function AppNavigator() {
           },
           headerTintColor: '#059669',
           headerTitleStyle: {
-            fontWeight: '700',
+            fontWeight: '800',
             color: '#0F172A',
             fontSize: 18,
           },
           headerShadowVisible: false,
           headerBackTitleVisible: false,
+          headerRight: () => (
+            <View style={{ marginRight: 4 }}>
+              <BatteryIndicator />
+            </View>
+          ),
         }}
       >
         <Stack.Screen
@@ -48,7 +55,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Profile"
           component={ProfileScreen}
-          options={{ title: 'Driver Profile' }}
+          options={{ title: 'Driver Profile & Garage' }}
         />
         <Stack.Screen
           name="Activity"
