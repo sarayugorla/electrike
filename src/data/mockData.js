@@ -1,6 +1,7 @@
 /**
  * Electrike Mock Data
  * Contains mock routes, charging stations, trip histories, and single-route selection logic.
+ * Default region: Hyderabad Metropolitan Area, Telangana.
  */
 
 export const ROUTE_PREFERENCES = {
@@ -10,39 +11,38 @@ export const ROUTE_PREFERENCES = {
   COOLEST_PATH: 'Coolest Path',
 };
 
-// 4 distinct corridors mapping 1:1 to the 4 Route Planning modes
+// 4 distinct corridors mapping 1:1 to the 4 Route Planning modes in Hyderabad
 export const MOCK_ROUTES = {
   [ROUTE_PREFERENCES.SAVED_PLACES]: {
     id: 'route_saved',
     preference: ROUTE_PREFERENCES.SAVED_PLACES,
     name: 'Saved Places Corridor',
-    subtitle: 'Via Bengaluru-Mysuru Expressway (NH275)',
-    distanceKm: 152,
-    etaMinutes: 138,
-    energyKwh: 28.2,
-    arrivalBattery: 26,
-    chargingCost: 310,
-    chargingStops: 2,
-    coolScore: 68,
+    subtitle: 'Via Outer Ring Road (ORR Expressway)',
+    distanceKm: 34.5,
+    etaMinutes: 38,
+    energyKwh: 6.8,
+    arrivalBattery: 68,
+    chargingCost: 180,
+    chargingStops: 1,
+    coolScore: 74,
     isSaved: true,
     tag: 'Frequent & Verified',
     turnInstructions: [
-      { id: 't1', instruction: 'Head southwest on Hosur Rd towards Electronic City Toll', distance: '800 m', icon: 'arrow-up' },
-      { id: 't2', instruction: 'Merge onto NICE Ring Road toward Expressway Exit', distance: '12 km', icon: 'git-merge' },
-      { id: 't3', instruction: 'Take the Bengaluru-Mysuru Expressway (NH275)', distance: '45 km', icon: 'arrow-forward' },
-      { id: 't4', instruction: 'Zeon Fast Charging Hub upcoming on left (Bidadi)', distance: '28 km', icon: 'flash' },
-      { id: 't5', instruction: 'Take Exit 4 toward Mysuru Palace Ring Road', distance: '1.2 km', icon: 'arrow-forward' },
-      { id: 't6', instruction: 'Arrive at Mysuru Palace on your right', distance: 'Destination', icon: 'flag' },
+      { id: 't1', instruction: 'Head south on Hitech City Main Rd towards Cyber Towers', distance: '1.2 km', icon: 'arrow-up' },
+      { id: 't2', instruction: 'Merge onto Nehru Outer Ring Road (ORR) via Gachibowli Interchange', distance: '8.5 km', icon: 'git-merge' },
+      { id: 't3', instruction: 'Continue straight on ORR past Nanakramguda Toll Plaza', distance: '14 km', icon: 'arrow-forward' },
+      { id: 't4', instruction: 'Jio-bp pulse EV Hub upcoming on service road (Shamshabad)', distance: '6.2 km', icon: 'flash' },
+      { id: 't5', instruction: 'Take Exit 16 toward Rajiv Gandhi International Airport', distance: '2.8 km', icon: 'arrow-forward' },
+      { id: 't6', instruction: 'Arrive at RGIA Departure Ramp', distance: 'Destination', icon: 'flag' },
     ],
     coordinates: [
-      { latitude: 12.8452, longitude: 77.6602 }, // Bengaluru (Electronic City)
-      { latitude: 12.8210, longitude: 77.5250 }, // Kengeri
-      { latitude: 12.7950, longitude: 77.3850 }, // Bidadi
-      { latitude: 12.7150, longitude: 77.2750 }, // Ramanagara
-      { latitude: 12.6100, longitude: 77.1000 }, // Channapatna
-      { latitude: 12.5250, longitude: 76.8950 }, // Mandya
-      { latitude: 12.4150, longitude: 76.6950 }, // Srirangapatna
-      { latitude: 12.3052, longitude: 76.6552 }, // Mysuru Palace
+      { latitude: 17.4435, longitude: 78.3772 }, // HITEC City
+      { latitude: 17.4401, longitude: 78.3489 }, // Gachibowli
+      { latitude: 17.4180, longitude: 78.3420 }, // Nanakramguda ORR
+      { latitude: 17.3750, longitude: 78.3650 }, // Appa Junction
+      { latitude: 17.3320, longitude: 78.3980 }, // Rajendranagar ORR
+      { latitude: 17.2750, longitude: 78.4210 }, // Shamshabad Toll
+      { latitude: 17.2403, longitude: 78.4294 }, // RGIA Airport
     ],
   },
 
@@ -50,32 +50,32 @@ export const MOCK_ROUTES = {
     id: 'route_cost',
     preference: ROUTE_PREFERENCES.COST_PATH,
     name: 'Cost Path Corridor',
-    subtitle: 'Via Kanakapura & Malavalli State Highway (NH948)',
-    distanceKm: 158,
-    etaMinutes: 148,
-    energyKwh: 25.4,
-    arrivalBattery: 32,
-    chargingCost: 215, // Lowest charging tariff
+    subtitle: 'Via Mehdipatnam & Attapur (Lowest Tariff)',
+    distanceKm: 29.2,
+    etaMinutes: 46,
+    energyKwh: 5.4,
+    arrivalBattery: 72,
+    chargingCost: 120, // Lowest charging tariff
     chargingStops: 1,
-    coolScore: 76,
+    coolScore: 71,
     isSaved: false,
     tag: 'Lowest Tariff',
     turnInstructions: [
-      { id: 't1', instruction: 'Head west on Bannerghatta Link towards NH948', distance: '1.4 km', icon: 'arrow-back' },
-      { id: 't2', instruction: 'Continue on Kanakapura Main Road towards Kaggalipura', distance: '18 km', icon: 'arrow-up' },
-      { id: 't3', instruction: 'Pass Statiq Smart EV Hub near Green Valley', distance: '34 km', icon: 'flash' },
-      { id: 't4', instruction: 'Slight left onto Malavalli-Bannur State Highway', distance: '42 km', icon: 'arrow-forward' },
-      { id: 't5', instruction: 'Enter Bannur Rd towards Mysuru City limits', distance: '14 km', icon: 'arrow-up' },
-      { id: 't6', instruction: 'Destination ahead: Mysuru Palace Gate 2', distance: 'Destination', icon: 'flag' },
+      { id: 't1', instruction: 'Head south on Road No. 1, Banjara Hills', distance: '1.5 km', icon: 'arrow-up' },
+      { id: 't2', instruction: 'Cross Masab Tank Flyover towards Mehdipatnam', distance: '4.2 km', icon: 'arrow-forward' },
+      { id: 't3', instruction: 'Continue on Attapur Ring Road past Pillar 140', distance: '7.8 km', icon: 'arrow-forward' },
+      { id: 't4', instruction: 'Tata Power EZ Charge upcoming at Aramghar', distance: '5.1 km', icon: 'flash' },
+      { id: 't5', instruction: 'Follow NH 44 Highway south to Shamshabad', distance: '8.4 km', icon: 'arrow-forward' },
+      { id: 't6', instruction: 'Arrive at destination', distance: 'Destination', icon: 'flag' },
     ],
     coordinates: [
-      { latitude: 12.8452, longitude: 77.6602 }, // Bengaluru
-      { latitude: 12.7750, longitude: 77.5600 }, // Kaggalipura
-      { latitude: 12.5480, longitude: 77.4200 }, // Kanakapura
-      { latitude: 12.4100, longitude: 77.1800 }, // Halaguru
-      { latitude: 12.3850, longitude: 77.0500 }, // Malavalli
-      { latitude: 12.3700, longitude: 76.8800 }, // Bannur
-      { latitude: 12.3052, longitude: 76.6552 }, // Mysuru Palace
+      { latitude: 17.4156, longitude: 78.4350 }, // Banjara Hills
+      { latitude: 17.3990, longitude: 78.4480 }, // Masab Tank
+      { latitude: 17.3780, longitude: 78.4400 }, // Mehdipatnam
+      { latitude: 17.3480, longitude: 78.4320 }, // Attapur
+      { latitude: 17.3150, longitude: 78.4380 }, // Aramghar
+      { latitude: 17.2550, longitude: 78.4310 }, // Shamshabad
+      { latitude: 17.2403, longitude: 78.4294 }, // RGIA Airport
     ],
   },
 
@@ -83,32 +83,32 @@ export const MOCK_ROUTES = {
     id: 'route_time',
     preference: ROUTE_PREFERENCES.TIME_PATH,
     name: 'Time Path Corridor',
-    subtitle: 'Via NICE Ring Road & Greenfield Super Expressway',
-    distanceKm: 146,
-    etaMinutes: 118, // Fastest ETA
-    energyKwh: 29.5,
-    arrivalBattery: 23,
-    chargingCost: 335,
+    subtitle: 'Via PVNR Elevated Expressway (Fastest)',
+    distanceKm: 31.0,
+    etaMinutes: 34,
+    energyKwh: 6.2,
+    arrivalBattery: 70,
+    chargingCost: 195,
     chargingStops: 1,
-    coolScore: 62,
+    coolScore: 78,
     isSaved: false,
     tag: 'Fastest ETA',
     turnInstructions: [
-      { id: 't1', instruction: 'Take NICE expressway toll ramp west', distance: '500 m', icon: 'arrow-forward' },
-      { id: 't2', instruction: 'High-speed cruising on Bengaluru-Mysuru Expressway', distance: '68 km', icon: 'speedometer' },
-      { id: 't3', instruction: 'Jio-bp pulse ultra-fast 120kW DC stop on right', distance: '30 km', icon: 'flash' },
-      { id: 't4', instruction: 'Flyover bypass over Srirangapatna town', distance: '18 km', icon: 'arrow-up' },
-      { id: 't5', instruction: 'Exit expressway directly into Mysuru Central Arterial', distance: '2.5 km', icon: 'arrow-back' },
-      { id: 't6', instruction: 'Arrived at destination: Mysuru Palace', distance: 'Destination', icon: 'flag' },
+      { id: 't1', instruction: 'Head southeast on Jubilee Hills Check Post Road', distance: '2.0 km', icon: 'arrow-up' },
+      { id: 't2', instruction: 'Take the ramp onto PVNR Elevated Expressway', distance: '11.6 km', icon: 'git-merge' },
+      { id: 't3', instruction: 'Descend at Aramghar Junction towards NH 44', distance: '3.4 km', icon: 'arrow-forward' },
+      { id: 't4', instruction: 'Zeon Fast Charger accessible via NH44 service road', distance: '7.5 km', icon: 'flash' },
+      { id: 't5', instruction: 'Take Airport Approach Flyover directly to terminal', distance: '4.8 km', icon: 'arrow-forward' },
+      { id: 't6', instruction: 'Arrive at Airport Departure Gate', distance: 'Destination', icon: 'flag' },
     ],
     coordinates: [
-      { latitude: 12.8452, longitude: 77.6602 }, // Bengaluru
-      { latitude: 12.8300, longitude: 77.4900 }, // NICE Jn
-      { latitude: 12.7500, longitude: 77.3200 }, // Ramanagara bypass
-      { latitude: 12.5600, longitude: 76.9800 }, // Maddur bypass
-      { latitude: 12.5100, longitude: 76.8800 }, // Mandya bypass
-      { latitude: 12.4300, longitude: 76.6800 }, // Srirangapatna
-      { latitude: 12.3052, longitude: 76.6552 }, // Mysuru Palace
+      { latitude: 17.4319, longitude: 78.4073 }, // Jubilee Hills
+      { latitude: 17.4080, longitude: 78.4380 }, // Banjara / Masab Tank Ramp
+      { latitude: 17.3820, longitude: 78.4410 }, // PVNR Mid-Span
+      { latitude: 17.3420, longitude: 78.4360 }, // Upperpally
+      { latitude: 17.3150, longitude: 78.4380 }, // Aramghar End
+      { latitude: 17.2620, longitude: 78.4320 }, // Shamshabad
+      { latitude: 17.2403, longitude: 78.4294 }, // RGIA Airport
     ],
   },
 
@@ -116,32 +116,32 @@ export const MOCK_ROUTES = {
     id: 'route_coolest',
     preference: ROUTE_PREFERENCES.COOLEST_PATH,
     name: 'Coolest Path Corridor',
-    subtitle: 'Via Magadi & Nagamangala Forest Canopy',
-    distanceKm: 166,
-    etaMinutes: 156,
-    energyKwh: 26.6,
-    arrivalBattery: 29,
-    chargingCost: 260,
+    subtitle: 'Via Gandipet & Osman Sagar Scenic Green Belt',
+    distanceKm: 42.0,
+    etaMinutes: 49,
+    energyKwh: 7.9,
+    arrivalBattery: 65,
+    chargingCost: 175,
     chargingStops: 1,
-    coolScore: 94, // Max Tree Canopy & Thermal Shade
+    coolScore: 92, // Highest eco & thermal score
     isSaved: false,
-    tag: 'Eco & Thermal',
+    tag: 'Greener & Shaded',
     turnInstructions: [
-      { id: 't1', instruction: 'Turn right towards Magadi Road forest corridor', distance: '600 m', icon: 'arrow-forward' },
-      { id: 't2', instruction: 'Enter 70% tree canopy covered shaded boulevard', distance: '24 km', icon: 'leaf' },
-      { id: 't3', instruction: 'Continue on State Highway 85 through Nagamangala', distance: '48 km', icon: 'arrow-up' },
-      { id: 't4', instruction: 'Kazam Eco EV Charging station in shaded grove', distance: '32 km', icon: 'flash' },
-      { id: 't5', instruction: 'Cross Kaveri river shaded bridge towards Mysuru', distance: '12 km', icon: 'arrow-forward' },
-      { id: 't6', instruction: 'Reached destination: Mysuru Palace', distance: 'Destination', icon: 'flag' },
+      { id: 't1', instruction: 'Head west from HITEC City towards Botanical Garden', distance: '3.2 km', icon: 'arrow-up' },
+      { id: 't2', instruction: 'Take Gandipet Main Road through tree-lined forest canopy', distance: '9.5 km', icon: 'leaf' },
+      { id: 't3', instruction: 'Pass picturesque Osman Sagar Lake bund view', distance: '8.0 km', icon: 'arrow-forward' },
+      { id: 't4', instruction: 'Statiq Eco Station at Gandipet Resort hub', distance: '6.2 km', icon: 'flash' },
+      { id: 't5', instruction: 'Connect through Himayat Sagar service bypass', distance: '9.8 km', icon: 'arrow-forward' },
+      { id: 't6', instruction: 'Arrive at Shamshabad Southern Junction', distance: 'Destination', icon: 'flag' },
     ],
     coordinates: [
-      { latitude: 12.8452, longitude: 77.6602 }, // Bengaluru
-      { latitude: 12.9600, longitude: 77.4000 }, // Tavarekere
-      { latitude: 12.9560, longitude: 77.2280 }, // Magadi
-      { latitude: 12.9200, longitude: 76.9500 }, // Kunigal
-      { latitude: 12.8200, longitude: 76.7500 }, // Nagamangala
-      { latitude: 12.4800, longitude: 76.7000 }, // Pandavapura
-      { latitude: 12.3052, longitude: 76.6552 }, // Mysuru Palace
+      { latitude: 17.4435, longitude: 78.3772 }, // HITEC City
+      { latitude: 17.4620, longitude: 78.3600 }, // Botanical Garden / Kondapur
+      { latitude: 17.4350, longitude: 78.3180 }, // Gandipet Lake approach
+      { latitude: 17.3910, longitude: 78.2980 }, // Osman Sagar Scenic Bund
+      { latitude: 17.3320, longitude: 78.3450 }, // Himayat Sagar Green Belt
+      { latitude: 17.2720, longitude: 78.3980 }, // Airport Bypass
+      { latitude: 17.2403, longitude: 78.4294 }, // RGIA Airport
     ],
   },
 };
@@ -167,230 +167,216 @@ export function getRecommendedRoutes(preference = ROUTE_PREFERENCES.SAVED_PLACES
   };
 }
 
-// Mock Charging Stations along the corridors with detailed reviews
+// Mock Charging Stations in Hyderabad with detailed reviews
 export const MOCK_CHARGING_STATIONS = [
   {
-    id: 'cs_1',
-    name: 'Zeon Fast Charging Hub - Bidadi',
-    address: 'NH 275, Near Toyota Industrial Plant, Bidadi',
-    coordinate: { latitude: 12.7950, longitude: 77.3850 },
+    id: 'cs_hyd_1',
+    name: 'Tata Power EZ Charge - HITEC Cyber Towers',
+    address: 'Cyber Towers Campus, Main Gateway, Madhapur, Hyderabad',
+    coordinate: { latitude: 17.4485, longitude: 78.3780 },
     chargingPower: '60 kW DC Fast Dual Gun',
     connectorType: 'CCS2 / Type 2 AC',
-    estimatedPrice: '₹14.50 / kWh',
+    estimatedPrice: '₹15.50 / kWh',
     availability: '3 of 4 Available',
     status: 'Available',
     rating: 4.8,
-    reviewCount: 42,
+    reviewCount: 38,
     reviews: [
       {
-        id: 'rev_1',
-        author: 'Kiran Rao',
+        id: 'rev_h1',
+        author: 'Suresh Varma',
         rating: 5,
-        comment: 'Fast charger and easy to locate. Great coffee shop right next door.',
-        date: '2 days ago',
+        comment: 'Very fast 60kW charging speed. Food court and clean restrooms right inside Cyber Towers.',
+        date: '1 day ago',
       },
       {
-        id: 'rev_2',
-        author: 'Deepa S.',
+        id: 'rev_h2',
+        author: 'Pranathi Reddy',
         rating: 5,
-        comment: 'Worked seamlessly with RFID tap. Charged from 20% to 80% in 35 mins.',
-        date: '1 week ago',
-      },
-      {
-        id: 'rev_101',
-        author: 'Naveen Kumar',
-        rating: 4,
-        comment: 'Well lit canopy area, clean washrooms, security guard was very helpful.',
-        date: '2 weeks ago',
-      },
-    ],
-  },
-  {
-    id: 'cs_2',
-    name: 'Tata Power EZ Charge - Ramanagara',
-    address: 'Expressway Service Road, Near Janapada Loka, Ramanagara',
-    coordinate: { latitude: 12.7150, longitude: 77.2750 },
-    chargingPower: '50 kW DC Fast Charger',
-    connectorType: 'CCS2',
-    estimatedPrice: '₹16.00 / kWh',
-    availability: '1 of 2 Available',
-    status: 'Available',
-    rating: 4.4,
-    reviewCount: 29,
-    reviews: [
-      {
-        id: 'rev_3',
-        author: 'Vikram Patel',
-        rating: 4,
-        comment: 'Reliable charger with shaded canopy. Quick OTP authentication.',
-        date: '3 days ago',
-      },
-      {
-        id: 'rev_4',
-        author: 'Arjun M.',
-        rating: 4,
-        comment: 'Slight queue during Sunday evening peak, but excellent charging speed.',
-        date: '2 weeks ago',
-      },
-      {
-        id: 'rev_102',
-        author: 'Sneha Joshi',
-        rating: 5,
-        comment: 'Perfect midpoint stop on the highway. App based start was instant.',
-        date: '3 weeks ago',
-      },
-    ],
-  },
-  {
-    id: 'cs_3',
-    name: 'Jio-bp pulse - Mandya Express',
-    address: 'Indian Oil Highway Complex, Mandya Bypass Mile 78',
-    coordinate: { latitude: 12.5250, longitude: 76.8950 },
-    chargingPower: '120 kW Ultra-Fast DC',
-    connectorType: 'Dual CCS2',
-    estimatedPrice: '₹15.20 / kWh',
-    availability: '2 of 2 Available',
-    status: 'Available',
-    rating: 4.9,
-    reviewCount: 65,
-    reviews: [
-      {
-        id: 'rev_5',
-        author: 'Sanjay Nair',
-        rating: 5,
-        comment: 'Blazing fast 120kW! Topped up in 20 minutes flat. 24/7 food court.',
-        date: 'Yesterday',
-      },
-      {
-        id: 'rev_6',
-        author: 'Pooja K.',
-        rating: 5,
-        comment: 'Very clean, illuminated well at night. Highly recommended for long trips!',
-        date: '4 days ago',
-      },
-    ],
-  },
-  {
-    id: 'cs_4',
-    name: 'Kazam EV Hub - Srirangapatna',
-    address: 'Mysuru Highway Junction, Heritage Bypass, Srirangapatna',
-    coordinate: { latitude: 12.4150, longitude: 76.6950 },
-    chargingPower: '30 kW DC Fast',
-    connectorType: 'CCS2 & GB/T',
-    estimatedPrice: '₹13.80 / kWh',
-    availability: '1 of 1 Available',
-    status: 'Available',
-    rating: 4.2,
-    reviewCount: 19,
-    reviews: [
-      {
-        id: 'rev_7',
-        author: 'Manoj Hegde',
-        rating: 4,
-        comment: 'Affordable rates, easy scan-and-pay via UPI QR code.',
+        comment: 'Worked seamlessly with RFID tap and Tata Power EZ Charge app. 20% to 80% in 35 mins.',
         date: '5 days ago',
       },
       {
-        id: 'rev_103',
-        author: 'Tanvi G.',
-        rating: 5,
-        comment: 'Pleasant temperature, nice tree shade while the car topped up.',
-        date: '10 days ago',
+        id: 'rev_h3',
+        author: 'Karthik Rao',
+        rating: 4,
+        comment: 'Dedicated EV parking bays with security staff assisting during busy office hours.',
+        date: '2 weeks ago',
       },
     ],
   },
   {
-    id: 'cs_5',
-    name: 'Statiq Smart EV Hub - Kanakapura',
-    address: 'NH 948, Near Green Valley Resort, Kanakapura',
-    coordinate: { latitude: 12.5480, longitude: 77.4200 },
-    chargingPower: '60 kW DC Fast',
-    connectorType: 'CCS2',
-    estimatedPrice: '₹14.00 / kWh',
+    id: 'cs_hyd_2',
+    name: 'Zeon Fast Charging Hub - Gachibowli ORR',
+    address: 'Near Gachibowli Junction ORR Entry, Financial District, Hyderabad',
+    coordinate: { latitude: 17.4360, longitude: 78.3520 },
+    chargingPower: '120 kW Ultra-Fast DC',
+    connectorType: 'Dual CCS2',
+    estimatedPrice: '₹17.00 / kWh',
     availability: '2 of 2 Available',
     status: 'Available',
-    rating: 4.7,
-    reviewCount: 23,
+    rating: 4.9,
+    reviewCount: 45,
     reviews: [
       {
-        id: 'rev_8',
-        author: 'Ramesh K.',
+        id: 'rev_h4',
+        author: 'Venkat Naidu',
         rating: 5,
-        comment: 'Great spot on the Kanakapura scenic route. Peaceful resort surroundings.',
+        comment: 'Blazing fast 120kW charger! Charged my EV6 in under 25 minutes. Ample space for large cars.',
+        date: '2 days ago',
+      },
+      {
+        id: 'rev_h5',
+        author: 'Aditi Sharma',
+        rating: 5,
+        comment: 'Convenient 24x7 entry from Outer Ring Road. 24-hr cafeteria adjacent.',
+        date: '1 week ago',
+      },
+    ],
+  },
+  {
+    id: 'cs_hyd_3',
+    name: 'Jio-bp pulse - Shamshabad Airport Plaza',
+    address: 'Airport Approach Road, Near Rajiv Gandhi Int Airport, Shamshabad',
+    coordinate: { latitude: 17.2550, longitude: 78.4310 },
+    chargingPower: '60 kW DC Fast',
+    connectorType: 'CCS2',
+    estimatedPrice: '₹16.00 / kWh',
+    availability: '3 of 4 Available',
+    status: 'Available',
+    rating: 4.6,
+    reviewCount: 31,
+    reviews: [
+      {
+        id: 'rev_h6',
+        author: 'Rahul Sen',
+        rating: 4,
+        comment: 'Ideal pre-flight top up spot. Clear signage from the expressway toll gate.',
         date: '3 days ago',
       },
       {
-        id: 'rev_104',
-        author: 'Harish Babu',
+        id: 'rev_h7',
+        author: 'Ananya G.',
+        rating: 5,
+        comment: 'Clean premises, good illumination at night, instant activation via Jio-bp app.',
+        date: '2 weeks ago',
+      },
+    ],
+  },
+  {
+    id: 'cs_hyd_4',
+    name: 'Statiq Smart EV Hub - Banjara Hills',
+    address: 'Road No. 1, Near City Center Mall, Banjara Hills, Hyderabad',
+    coordinate: { latitude: 17.4180, longitude: 78.4420 },
+    chargingPower: '50 kW DC Fast',
+    connectorType: 'CCS2 / CHAdeMO',
+    estimatedPrice: '₹14.80 / kWh',
+    availability: '1 of 2 Available',
+    status: 'Available',
+    rating: 4.5,
+    reviewCount: 27,
+    reviews: [
+      {
+        id: 'rev_h8',
+        author: 'Mahesh B.',
         rating: 4,
-        comment: 'Good steady 55kW flow, clean drinking water available.',
+        comment: 'Central location in Banjara Hills. Mall parking can get busy on weekends.',
+        date: '4 days ago',
+      },
+      {
+        id: 'rev_h9',
+        author: 'Divya P.',
+        rating: 5,
+        comment: 'Well shaded canopy and staff helps plug in. Smooth contactless payment.',
         date: '1 week ago',
+      },
+    ],
+  },
+  {
+    id: 'cs_hyd_5',
+    name: 'Ather Grid & Statiq - Jubilee Hills 36',
+    address: 'Road No. 36, Near Metro Pillar 1640, Jubilee Hills, Hyderabad',
+    coordinate: { latitude: 17.4325, longitude: 78.4020 },
+    chargingPower: '30 kW DC + Fast AC',
+    connectorType: 'Type 2 AC / CCS2',
+    estimatedPrice: '₹13.50 / kWh',
+    availability: '4 of 4 Available',
+    status: 'Available',
+    rating: 4.7,
+    reviewCount: 22,
+    reviews: [
+      {
+        id: 'rev_h10',
+        author: 'Vikram Joshi',
+        rating: 5,
+        comment: 'Reliable 2-wheeler and 4-wheeler hub. Plenty of cafes around while waiting.',
+        date: '2 days ago',
       },
     ],
   },
 ];
 
-// Initial mock activity / trip history
+// Initial mock activity / trip history in Hyderabad
 export const INITIAL_MOCK_TRIPS = [
   {
     id: 'trip_101',
-    source: 'Electronic City, Bengaluru',
-    destination: 'Mysuru Palace, Mysuru',
-    stops: ['Ramanagara Silks'],
+    source: 'HITEC City, Madhapur',
+    destination: 'Rajiv Gandhi Int. Airport (RGIA)',
+    stops: ['Gachibowli Junction'],
     date: 'Yesterday at 09:30 AM',
     vehicle: 'Tata Nexon EV Max',
     vehicleType: 'Car',
     preference: ROUTE_PREFERENCES.COOLEST_PATH,
-    distanceKm: 166,
-    durationMinutes: 156,
-    energyConsumedKwh: 26.6,
-    totalCost: '₹260',
-    savedCo2Kg: '18.4 kg',
+    distanceKm: 42.0,
+    durationMinutes: 49,
+    energyConsumedKwh: 7.9,
+    totalCost: '₹175',
+    savedCo2Kg: '5.6 kg',
   },
   {
     id: 'trip_102',
-    source: 'Indiranagar 100ft Rd, Bengaluru',
-    destination: 'Nandi Hills Summit',
+    source: 'Banjara Hills, Road No. 1',
+    destination: 'Financial District, Gachibowli',
     stops: [],
-    date: '04 Sep 2026, 06:15 AM',
+    date: '04 Sep 2026, 06:15 PM',
     vehicle: 'Ather 450X',
     vehicleType: 'Scooty',
     preference: ROUTE_PREFERENCES.TIME_PATH,
-    distanceKm: 62,
-    durationMinutes: 75,
-    energyConsumedKwh: 2.8,
-    totalCost: '₹42',
-    savedCo2Kg: '7.1 kg',
+    distanceKm: 16.5,
+    durationMinutes: 28,
+    energyConsumedKwh: 1.8,
+    totalCost: '₹28',
+    savedCo2Kg: '2.4 kg',
   },
   {
     id: 'trip_103',
-    source: 'Whitefield Tech Park, Bengaluru',
-    destination: 'Kempegowda Int. Airport (BLR)',
-    stops: ['Budigere Cross'],
-    date: '28 Aug 2026, 04:00 PM',
+    source: 'Jubilee Hills, Road No. 36',
+    destination: 'Secunderabad Junction',
+    stops: ['Begumpet Flyover'],
+    date: '28 Aug 2026, 03:00 PM',
     vehicle: 'Tata Nexon EV Max',
     vehicleType: 'Car',
     preference: ROUTE_PREFERENCES.COST_PATH,
-    distanceKm: 41,
-    durationMinutes: 52,
-    energyConsumedKwh: 7.2,
-    totalCost: '₹95',
-    savedCo2Kg: '4.8 kg',
+    distanceKm: 18.2,
+    durationMinutes: 36,
+    energyConsumedKwh: 3.4,
+    totalCost: '₹55',
+    savedCo2Kg: '2.8 kg',
   },
 ];
 
-// Current mock location
+// Current mock location (Hyderabad)
 export const MOCK_CURRENT_LOCATION = {
-  latitude: 12.8452,
-  longitude: 77.6602,
-  latitudeDelta: 0.8,
-  longitudeDelta: 0.8,
-  address: 'Electronic City Phase 1, Bengaluru',
-  coordinatesDisplay: '12.8452° N, 77.6602° E',
+  latitude: 17.4435,
+  longitude: 78.3772,
+  latitudeDelta: 0.15,
+  longitudeDelta: 0.15,
+  address: 'HITEC City, Madhapur, Hyderabad',
+  coordinatesDisplay: '17.4435° N, 78.3772° E',
 };
 
 export const MOCK_DESTINATION = {
-  latitude: 12.3052,
-  longitude: 76.6552,
-  address: 'Mysuru Palace, Mysuru',
+  latitude: 17.2403,
+  longitude: 78.4294,
+  address: 'Rajiv Gandhi Int. Airport (RGIA), Shamshabad',
 };

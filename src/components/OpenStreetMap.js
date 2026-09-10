@@ -1,5 +1,5 @@
 import React, { useMemo, useRef } from 'react';
-import { StyleSheet, View, Platform, Text } from 'react-native';
+import { StyleSheet, View, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 /**
@@ -22,9 +22,9 @@ export default function OpenStreetMap({
   const mapHtml = useMemo(() => {
     const coordsJson = JSON.stringify(routeCoordinates || []);
     const stationsJson = JSON.stringify(stations || []);
-    const sourceJson = JSON.stringify(source || { name: 'Source', latitude: 12.8452, longitude: 77.6602 });
-    const destJson = JSON.stringify(destination || { name: 'Destination', latitude: 12.3052, longitude: 76.6552 });
-    const currentLocJson = JSON.stringify(currentLocation || { latitude: 12.8452, longitude: 77.6602 });
+    const sourceJson = JSON.stringify(source || { name: 'Source', latitude: 17.4435, longitude: 78.3772 });
+    const destJson = JSON.stringify(destination || { name: 'Destination', latitude: 17.2403, longitude: 78.4294 });
+    const currentLocJson = JSON.stringify(currentLocation || { latitude: 17.4435, longitude: 78.3772 });
 
     return `
 <!DOCTYPE html>
@@ -88,9 +88,9 @@ export default function OpenStreetMap({
       width: 22px;
       height: 22px;
       background: #2563EB;
-      border: 3px solid #FFFFFF;
+      border: 3px solid #FAFAF7;
       border-radius: 50%;
-      box-shadow: 0 0 0 6px rgba(37,99,235,0.3), 0 3px 6px rgba(0,0,0,0.25);
+      box-shadow: 0 0 0 6px rgba(37,99,235,0.25), 0 3px 6px rgba(0,0,0,0.25);
     }
 
     .leaflet-popup-content-wrapper {
@@ -155,7 +155,7 @@ export default function OpenStreetMap({
     var map = L.map('map', {
       zoomControl: false,
       attributionControl: false
-    }).setView([12.58, 77.16], 9);
+    }).setView([17.3850, 78.4867], 11);
 
     // Official OpenStreetMap Tile Server (Free, No API Key)
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {

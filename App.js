@@ -13,7 +13,7 @@ import { BatteryProvider } from './src/context/BatteryContext';
 export default function App() {
   return (
     <SafeAreaProvider style={styles.container}>
-      <StatusBar style="dark" backgroundColor="#FFFFFF" />
+      <StatusBar style="dark" backgroundColor="#FAFAF7" />
       <BatteryProvider>
         <AppNavigator />
       </BatteryProvider>
@@ -24,6 +24,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFAF7',
   },
 });

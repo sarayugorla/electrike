@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { INITIAL_MOCK_TRIPS } from '../data/mockData';
 import { getTrips } from '../storage/storage';
@@ -13,9 +14,12 @@ import { getTrips } from '../storage/storage';
 export default function ActivityScreen({ navigation }) {
   const [trips, setTrips] = useState(INITIAL_MOCK_TRIPS);
 
-  useEffect(() => {
-    loadTrips();
-  }, []);
+  // Reload trips whenever screen is focused to pick up auto-saved journeys
+  useFocusEffect(
+    useCallback(() => {
+      loadTrips();
+    }, [])
+  );
 
   const loadTrips = async () => {
     try {
@@ -49,7 +53,7 @@ export default function ActivityScreen({ navigation }) {
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <View style={styles.summaryIconCircle}>
-              <Ionicons name="leaf" size={24} color="#10B981" />
+              <Ionicons name="leaf" size={24} color="#F8FAFF" />
             </View>
             <View>
               <Text style={styles.summaryTitle}>Eco Trip Activity</Text>
@@ -148,7 +152,7 @@ export default function ActivityScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFAF7',
   },
   scrollContent: {
     padding: 16,

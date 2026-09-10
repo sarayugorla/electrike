@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,12 +8,23 @@ import {
   ScrollView,
   Modal,
   Alert,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ROUTE_PREFERENCES } from '../data/mockData';
-import { getProfile, getVehicles, setActiveVehicle } from '../storage/storage';
+import { ROUTE_PREFERENCES, MOCK_CURRENT_LOCATION } from '../data/mockData';
+import {
+  getProfile,
+  getVehicles,
+  setActiveVehicle,
+  getSavedPlaces,
+  saveSavedPlaces,
+  saveTrip,
+} from '../storage/storage';
+import { searchLocations } from '../services/geocodingService';
 import BatteryIndicator from '../components/BatteryIndicator';
 import { useBattery } from '../context/BatteryContext';
 
@@ -30,18 +41,47 @@ export default function RoutePlanningScreen({ navigation, route }) {
   const [selectedVehicleName, setSelectedVehicleName] = useState('Tata Nexon EV Max');
   const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
 
-  // Trip Inputs
-  const [source, setSource] = useState('Electronic City, Bengaluru');
-  const [destination, setDestination] = useState('Mysuru Palace, Mysuru');
+  // Trip Inputs & Coordinates (Default: Hyderabad Metro Corridor)
+  const [source, setSource] = useState('HITEC City, Madhapur');
+  const [sourceLocation, setSourceLocation] = useState({
+    latitude: 17.4435,
+    longitude: 78.3772,
+    name: 'HITEC City, Madhapur',
+  });
+
+  const [destination, setDestination] = useState('Rajiv Gandhi Int. Airport (RGIA)');
+  const [destinationLocation, setDestinationLocation] = useState({
+    latitude: 17.2403,
+    longitude: 78.4294,
+    name: 'Rajiv Gandhi Int. Airport (RGIA)',
+  });
+
   const [intermediateStops, setIntermediateStops] = useState([]);
+
+  // Autocomplete State
+  const [activeSearchField, setActiveSearchField] = useState(null); // 'source' | 'destination' | stop_index
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef(null);
 
   // Route Preference (Default: Saved Places)
   const [selectedPreference, setSelectedPreference] = useState(ROUTE_PREFERENCES.SAVED_PLACES);
 
-  // Reload vehicles and profile whenever screen comes into focus
+  // Saved Places State & Modal
+  const [savedPlaces, setSavedPlacesState] = useState(null);
+  const [savedPlacesModalVisible, setSavedPlacesModalVisible] = useState(false);
+  const [editingPlaceKey, setEditingPlaceKey] = useState(null);
+  const [editPlaceAddress, setEditPlaceAddress] = useState('');
+  const [editPlaceCoords, setEditPlaceCoords] = useState(null);
+
+  // Current Location state
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+
+  // Reload vehicles, profile, and saved places on focus
   useFocusEffect(
     useCallback(() => {
       loadUserData();
+      loadSavedPlaces();
     }, [])
   );
 
@@ -62,7 +102,6 @@ export default function RoutePlanningScreen({ navigation, route }) {
 
       if (vehicles && vehicles.length > 0) {
         setVehiclesList(vehicles);
-        // Find explicitly active vehicle
         const active = vehicles.find((v) => v.isActive) || vehicles[0];
         setActiveVehicleState(active);
         const name = active.name || `${active.make} ${active.model}`;
@@ -77,6 +116,95 @@ export default function RoutePlanningScreen({ navigation, route }) {
     }
   };
 
+  const loadSavedPlaces = async () => {
+    try {
+      const places = await getSavedPlaces();
+      setSavedPlacesState(places);
+    } catch (error) {
+      console.error('Error loading saved places:', error);
+    }
+  };
+
+  // Autocomplete search handler with 400ms debounce
+  const handleLocationQuery = (field, text, index = null) => {
+    if (field === 'source') {
+      setSource(text);
+      setActiveSearchField('source');
+    } else if (field === 'destination') {
+      setDestination(text);
+      setActiveSearchField('destination');
+    } else if (field === 'stop') {
+      const updated = [...intermediateStops];
+      updated[index] = text;
+      setIntermediateStops(updated);
+      setActiveSearchField(`stop_${index}`);
+    } else if (field === 'editSavedPlace') {
+      setEditPlaceAddress(text);
+      setActiveSearchField('editSavedPlace');
+    }
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (!text || text.trim().length < 2) {
+      setSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await searchLocations(text);
+        setSuggestions(results);
+      } catch (err) {
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+  };
+
+  // Select suggestion
+  const handleSelectSuggestion = (suggestion) => {
+    const formattedAddress = suggestion.subtitle
+      ? `${suggestion.name}, ${suggestion.subtitle.split(',')[0]}`
+      : suggestion.name;
+
+    if (activeSearchField === 'source') {
+      setSource(formattedAddress);
+      setSourceLocation({
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+        name: formattedAddress,
+        address: suggestion.displayName || `${suggestion.name}, ${suggestion.subtitle}`,
+      });
+    } else if (activeSearchField === 'destination') {
+      setDestination(formattedAddress);
+      setDestinationLocation({
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+        name: formattedAddress,
+        address: suggestion.displayName || `${suggestion.name}, ${suggestion.subtitle}`,
+      });
+    } else if (activeSearchField?.startsWith('stop_')) {
+      const idx = parseInt(activeSearchField.replace('stop_', ''), 10);
+      const updated = [...intermediateStops];
+      updated[idx] = formattedAddress;
+      setIntermediateStops(updated);
+    } else if (activeSearchField === 'editSavedPlace') {
+      setEditPlaceAddress(formattedAddress);
+      setEditPlaceCoords({
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+      });
+    }
+
+    setSuggestions([]);
+    setActiveSearchField(null);
+  };
+
   // Add intermediate stop (Max 3)
   const handleAddStop = () => {
     if (intermediateStops.length >= 3) {
@@ -86,20 +214,17 @@ export default function RoutePlanningScreen({ navigation, route }) {
     setIntermediateStops([...intermediateStops, '']);
   };
 
-  // Update intermediate stop
-  const handleUpdateStop = (text, index) => {
-    const updated = [...intermediateStops];
-    updated[index] = text;
-    setIntermediateStops(updated);
-  };
-
   // Remove intermediate stop
   const handleRemoveStop = (index) => {
     const updated = intermediateStops.filter((_, i) => i !== index);
     setIntermediateStops(updated);
+    if (activeSearchField === `stop_${index}`) {
+      setActiveSearchField(null);
+      setSuggestions([]);
+    }
   };
 
-  // Switch Active Vehicle from dropdown modal
+  // Switch Active Vehicle
   const handleSelectVehicle = async (vehicle) => {
     const vName = vehicle.name || `${vehicle.make} ${vehicle.model}`;
     setSelectedVehicleName(vName);
@@ -109,8 +234,127 @@ export default function RoutePlanningScreen({ navigation, route }) {
     await loadUserData();
   };
 
-  // Find Routes
-  const handleFindRoutes = () => {
+  // Select Preference Card
+  const handleSelectPreference = (prefId) => {
+    setSelectedPreference(prefId);
+    if (prefId === ROUTE_PREFERENCES.SAVED_PLACES) {
+      setSavedPlacesModalVisible(true);
+    }
+  };
+
+  // Select a Saved Place as Destination and directly navigate to the Main Map page
+  const handleChooseSavedPlace = async (place) => {
+    if (!place || (!place.address && !place.name)) {
+      Alert.alert('Unset Place', 'Please edit and configure this saved place first.');
+      return;
+    }
+
+    const chosenName = place.name || place.address;
+    const destCoords = {
+      latitude: place.latitude || 17.385,
+      longitude: place.longitude || 78.486,
+      name: chosenName,
+      address: place.address || chosenName,
+    };
+
+    // Determine Source:
+    // 1. Use already selected Source if one exists
+    // 2. Otherwise use current device location if available
+    let effectiveSource = '';
+    let effectiveSourceCoords = null;
+
+    if (source && source.trim().length > 0) {
+      effectiveSource = source.trim();
+      effectiveSourceCoords = sourceLocation || {
+        latitude: 17.4435,
+        longitude: 78.3772,
+        name: effectiveSource,
+      };
+    } else if (MOCK_CURRENT_LOCATION && MOCK_CURRENT_LOCATION.latitude) {
+      effectiveSource = MOCK_CURRENT_LOCATION.address || 'Current Location';
+      effectiveSourceCoords = {
+        latitude: MOCK_CURRENT_LOCATION.latitude,
+        longitude: MOCK_CURRENT_LOCATION.longitude,
+        name: effectiveSource,
+      };
+    }
+
+    // If no usable Source can be determined, inform user and remain on route planning screen
+    if (!effectiveSource || !effectiveSourceCoords) {
+      Alert.alert(
+        'Source Location Required',
+        'Please enter a starting location or enable GPS location before routing to your saved place.'
+      );
+      return;
+    }
+
+    // Update screen state
+    setDestination(chosenName);
+    setDestinationLocation(destCoords);
+    setSelectedPreference(ROUTE_PREFERENCES.SAVED_PLACES);
+    setSavedPlacesModalVisible(false);
+
+    const filteredStops = intermediateStops.filter((s) => s && s.trim().length > 0);
+
+    // Auto-save trip on journey initiation
+    try {
+      await saveTrip({
+        source: effectiveSource,
+        destination: chosenName,
+        stops: filteredStops,
+        preference: ROUTE_PREFERENCES.SAVED_PLACES,
+        vehicle: selectedVehicleName,
+        batteryPercentage,
+        vehicleType: activeVehicle?.type || 'Car',
+      });
+    } catch (e) {
+      console.warn('Failed to auto-save trip on saved place navigation:', e);
+    }
+
+    // Navigate directly to the Main Map page
+    navigation.navigate('Map', {
+      source: effectiveSource,
+      sourceCoords: effectiveSourceCoords,
+      destination: chosenName,
+      destinationCoords: destCoords,
+      stops: filteredStops,
+      preference: ROUTE_PREFERENCES.SAVED_PLACES,
+      vehicle: selectedVehicleName,
+      batteryPercentage,
+    });
+  };
+
+  // Save edited saved place
+  const handleSavePlaceEdit = async (placeKey) => {
+    if (!editPlaceAddress.trim()) {
+      Alert.alert('Empty Address', 'Please provide a valid location or address.');
+      return;
+    }
+
+    const currentPlaces = savedPlaces || {};
+    const existing = currentPlaces[placeKey] || {};
+    const updatedPlaces = {
+      ...currentPlaces,
+      [placeKey]: {
+        ...existing,
+        name: editPlaceAddress.trim(),
+        address: editPlaceAddress.trim(),
+        latitude: editPlaceCoords?.latitude || existing.latitude || 17.385,
+        longitude: editPlaceCoords?.longitude || existing.longitude || 78.486,
+      },
+    };
+
+    await saveSavedPlaces(updatedPlaces);
+    setSavedPlacesState(updatedPlaces);
+    setEditingPlaceKey(null);
+    setEditPlaceAddress('');
+    setEditPlaceCoords(null);
+    setSuggestions([]);
+    setActiveSearchField(null);
+  };
+
+  // Find Route (Journey Initiation: Auto-saves trip ONLY here)
+  const handleFindRoutes = async () => {
     if (!source.trim()) {
       Alert.alert('Required Field', 'Please enter a starting point.');
       return;
@@ -122,9 +366,26 @@ export default function RoutePlanningScreen({ navigation, route }) {
 
     const filteredStops = intermediateStops.filter((s) => s.trim().length > 0);
 
+    // Auto-save trip record ONLY upon user tapping Find Route
+    try {
+      await saveTrip({
+        source: source.trim(),
+        destination: destination.trim(),
+        stops: filteredStops,
+        preference: selectedPreference,
+        vehicle: selectedVehicleName,
+        batteryPercentage,
+        vehicleType: activeVehicle?.type || 'Car',
+      });
+    } catch (e) {
+      console.warn('Failed to auto-save trip on find routes:', e);
+    }
+
     navigation.navigate('Map', {
       source: source.trim(),
+      sourceCoords: sourceLocation,
       destination: destination.trim(),
+      destinationCoords: destinationLocation,
       stops: filteredStops,
       preference: selectedPreference,
       vehicle: selectedVehicleName,
@@ -132,45 +393,41 @@ export default function RoutePlanningScreen({ navigation, route }) {
     });
   };
 
-  // Preference Definitions with Descriptions & Icons
+  // 2x2 Route Modes Definition
   const PREFERENCE_OPTIONS = [
-    {
-      id: ROUTE_PREFERENCES.SAVED_PLACES,
-      title: 'Saved Places',
-      desc: 'Frequent & trusted corridors with verified charging',
-      icon: 'bookmark-outline',
-      badge: 'Fast & Direct',
-    },
     {
       id: ROUTE_PREFERENCES.COST_PATH,
       title: 'Cost Path',
-      desc: 'Optimized for lowest total charging tariffs',
+      desc: 'Lowest charging cost',
       icon: 'wallet-outline',
       badge: 'Lowest Tariff',
     },
     {
       id: ROUTE_PREFERENCES.TIME_PATH,
       title: 'Time Path',
-      desc: 'Fastest ETA with high-speed DC highway corridors',
+      desc: 'Fastest estimated route',
       icon: 'time-outline',
       badge: 'Fastest ETA',
     },
     {
       id: ROUTE_PREFERENCES.COOLEST_PATH,
       title: 'Coolest Path',
-      desc: 'High canopy shade, lower ambient heat & battery stress',
+      desc: 'Cooler, greener route',
       icon: 'leaf-outline',
       badge: 'Eco & Thermal',
+    },
+    {
+      id: ROUTE_PREFERENCES.SAVED_PLACES,
+      title: 'Saved Places',
+      desc: 'Saved & frequent destinations',
+      icon: 'bookmark-outline',
+      badge: 'Quick Pick',
     },
   ];
 
   return (
     <View style={styles.container}>
-      {/* Top App Bar with safe-area handling:
-          LEFT: Hamburger menu
-          CENTER / NEAR LEFT: Active vehicle dropdown pill
-          RIGHT: Editable battery indicator
-      */}
+      {/* Top App Bar with safe-area handling */}
       <View
         style={[
           styles.topBar,
@@ -189,7 +446,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
           <Ionicons name="menu" size={24} color="#0F172A" />
         </TouchableOpacity>
 
-        {/* Active Vehicle Selector Pill (Restyled in cool blue/green, no neon yellow) */}
+        {/* Active Vehicle Selector Pill */}
         <TouchableOpacity
           style={styles.vehiclePill}
           onPress={() => setVehicleModalVisible(true)}
@@ -202,7 +459,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
           <Ionicons name="chevron-down" size={14} color="#059669" />
         </TouchableOpacity>
 
-        {/* Editable Battery Indicator */}
+        {/* Battery Indicator */}
         <BatteryIndicator />
       </View>
 
@@ -213,22 +470,87 @@ export default function RoutePlanningScreen({ navigation, route }) {
       >
         {/* Header Title */}
         <View style={styles.headerSection}>
-          <Text style={styles.pageTitle}>Plan Your EV Journey</Text>
-          <Text style={styles.pageSubtitle}>
-            Thermal-aware routing, canopy shade & tariff optimization
-          </Text>
+          <Text style={styles.pageTitle}>ELECTRIKE</Text>
+          <Text style={styles.pageSubtitle}>Plan Your Journey</Text>
         </View>
 
-        {/* Trip Locations Card */}
+        {/* Route Location Card */}
         <View style={styles.tripCard}>
           <Text style={styles.cardHeaderTitle}>Route Locations</Text>
 
-          {/* Source */}
+          {/* Source Input */}
           <View style={styles.locationRow}>
-            <View style={styles.iconContainer}>
-              <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+            <TouchableOpacity
+              style={styles.iconContainer}
+              onPress={() => {
+                Alert.alert(
+                  'Use Current Location',
+                  'Use your current location as the source?',
+                  [
+                    { text: 'No', style: 'cancel' },
+                    {
+                      text: 'YES',
+                      onPress: async () => {
+                        setIsFetchingLocation(true);
+                        try {
+                          const { status } = await Location.requestForegroundPermissionsAsync();
+                          if (status !== 'granted') {
+                            Alert.alert(
+                              'Permission Denied',
+                              'Location permission is required to use your current location as source.'
+                            );
+                            setIsFetchingLocation(false);
+                            return;
+                          }
+                          const loc = await Location.getCurrentPositionAsync({
+                            accuracy: Location.Accuracy.Balanced,
+                          });
+                          const { latitude, longitude } = loc.coords;
+                          // Reverse geocode to get a human-readable address
+                          const reverseResult = await Location.reverseGeocodeAsync({
+                            latitude,
+                            longitude,
+                          });
+                          let label = 'Current Location';
+                          if (reverseResult && reverseResult.length > 0) {
+                            const r = reverseResult[0];
+                            const parts = [
+                              r.name,
+                              r.street,
+                              r.district || r.subregion,
+                              r.city,
+                            ].filter(Boolean);
+                            label = parts.slice(0, 2).join(', ') || 'Current Location';
+                          }
+                          setSource(label);
+                          setSourceLocation({
+                            latitude,
+                            longitude,
+                            name: label,
+                          });
+                        } catch (err) {
+                          Alert.alert(
+                            'Location Error',
+                            'Unable to retrieve your current location. Please check your GPS settings.'
+                          );
+                        } finally {
+                          setIsFetchingLocation(false);
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel="Use current location as source"
+            >
+              {isFetchingLocation ? (
+                <ActivityIndicator size="small" color="#10B981" style={{ width: 14, height: 14 }} />
+              ) : (
+                <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+              )}
               <View style={styles.verticalConnector} />
-            </View>
+            </TouchableOpacity>
             <View style={styles.inputFlex}>
               <Text style={styles.locationLabel}>Source</Text>
               <TextInput
@@ -236,44 +558,90 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 placeholder="Enter starting location"
                 placeholderTextColor="#94A3B8"
                 value={source}
-                onChangeText={setSource}
+                onChangeText={(text) => handleLocationQuery('source', text)}
+                onFocus={() => setActiveSearchField('source')}
               />
             </View>
           </View>
 
-          {/* Intermediate Stops (Clean blue/green palette, NO orange) */}
+          {/* Autocomplete suggestions for Source */}
+          {activeSearchField === 'source' && suggestions.length > 0 && (
+            <View style={styles.suggestionsDropdown}>
+              {suggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Ionicons name="location-outline" size={16} color="#059669" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.suggestionTitle}>{item.name}</Text>
+                    <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                      {item.displayName}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Intermediate Stops */}
           {intermediateStops.map((stop, index) => (
-            <View key={`stop_${index}`} style={styles.locationRow}>
-              <View style={styles.iconContainer}>
-                <View style={[styles.dot, { backgroundColor: '#0284C7' }]} />
-                <View style={styles.verticalConnector} />
-              </View>
-              <View style={styles.inputFlex}>
-                <View style={styles.stopHeaderRow}>
-                  <Text style={[styles.locationLabel, { color: '#0284C7' }]}>
-                    Stop {index + 1}
-                  </Text>
-                  <View style={styles.stopBadge}>
-                    <Text style={styles.stopBadgeText}>Intermediate</Text>
+            <View key={`stop_${index}`}>
+              <View style={styles.locationRow}>
+                <View style={styles.iconContainer}>
+                  <View style={[styles.dot, { backgroundColor: '#0284C7' }]} />
+                  <View style={styles.verticalConnector} />
+                </View>
+                <View style={styles.inputFlex}>
+                  <View style={styles.stopHeaderRow}>
+                    <Text style={[styles.locationLabel, { color: '#0284C7' }]}>
+                      Stop {index + 1}
+                    </Text>
+                    <View style={styles.stopBadge}>
+                      <Text style={styles.stopBadgeText}>Intermediate</Text>
+                    </View>
+                  </View>
+                  <View style={styles.stopInputWrapper}>
+                    <TextInput
+                      style={[styles.locationInput, styles.stopInput]}
+                      placeholder={`Intermediate stop ${index + 1}`}
+                      placeholderTextColor="#94A3B8"
+                      value={stop}
+                      onChangeText={(text) => handleLocationQuery('stop', text, index)}
+                      onFocus={() => setActiveSearchField(`stop_${index}`)}
+                    />
+                    <TouchableOpacity
+                      onPress={() => handleRemoveStop(index)}
+                      style={styles.removeStopBtn}
+                      accessibilityLabel={`Remove stop ${index + 1}`}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#64748B" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.stopInputWrapper}>
-                  <TextInput
-                    style={[styles.locationInput, styles.stopInput]}
-                    placeholder={`Intermediate stop ${index + 1} (e.g. charging/rest)`}
-                    placeholderTextColor="#94A3B8"
-                    value={stop}
-                    onChangeText={(text) => handleUpdateStop(text, index)}
-                  />
-                  <TouchableOpacity
-                    onPress={() => handleRemoveStop(index)}
-                    style={styles.removeStopBtn}
-                    accessibilityLabel={`Remove stop ${index + 1}`}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
               </View>
+
+              {/* Suggestions for intermediate stop */}
+              {activeSearchField === `stop_${index}` && suggestions.length > 0 && (
+                <View style={styles.suggestionsDropdown}>
+                  {suggestions.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.suggestionItem}
+                      onPress={() => handleSelectSuggestion(item)}
+                    >
+                      <Ionicons name="location-outline" size={16} color="#0284C7" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.suggestionTitle}>{item.name}</Text>
+                        <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                          {item.displayName}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           ))}
 
@@ -291,7 +659,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
             </TouchableOpacity>
           )}
 
-          {/* Destination */}
+          {/* Destination Input */}
           <View style={styles.locationRow}>
             <View style={styles.iconContainer}>
               <View style={[styles.dot, { backgroundColor: '#EF4444' }]} />
@@ -303,93 +671,285 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 placeholder="Enter destination location"
                 placeholderTextColor="#94A3B8"
                 value={destination}
-                onChangeText={setDestination}
+                onChangeText={(text) => handleLocationQuery('destination', text)}
+                onFocus={() => setActiveSearchField('destination')}
               />
             </View>
           </View>
+
+          {/* Autocomplete suggestions for Destination */}
+          {activeSearchField === 'destination' && suggestions.length > 0 && (
+            <View style={styles.suggestionsDropdown}>
+              {suggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Ionicons name="location-outline" size={16} color="#EF4444" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.suggestionTitle}>{item.name}</Text>
+                    <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                      {item.displayName}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {isSearching && (
+            <View style={styles.searchingIndicatorRow}>
+              <ActivityIndicator size="small" color="#059669" />
+              <Text style={styles.searchingText}>Searching locations...</Text>
+            </View>
+          )}
         </View>
 
-        {/* Route Preference Section */}
+        {/* Route Preference Section: 2x2 Grid */}
         <View style={styles.preferenceSection}>
           <Text style={styles.sectionTitle}>Route Preference</Text>
           <Text style={styles.sectionSub}>
-            Select optimization criteria for your single navigation corridor
+            Choose optimization criteria for your EV corridor
           </Text>
 
-          <View style={styles.preferenceGrid}>
+          <View style={styles.gridContainer}>
             {PREFERENCE_OPTIONS.map((opt) => {
               const isSelected = selectedPreference === opt.id;
               return (
                 <TouchableOpacity
                   key={opt.id}
                   style={[
-                    styles.preferenceCard,
-                    isSelected && styles.preferenceCardSelected,
+                    styles.gridCard,
+                    isSelected && styles.gridCardSelected,
                   ]}
-                  onPress={() => setSelectedPreference(opt.id)}
+                  onPress={() => handleSelectPreference(opt.id)}
                   activeOpacity={0.8}
                 >
-                  <View style={styles.prefTopRow}>
+                  <View style={styles.gridTopRow}>
                     <View
                       style={[
-                        styles.prefIconWrap,
-                        isSelected && styles.prefIconWrapSelected,
+                        styles.gridIconWrap,
+                        isSelected && styles.gridIconWrapSelected,
                       ]}
                     >
                       <Ionicons
                         name={opt.icon}
-                        size={20}
+                        size={26}
                         color={isSelected ? '#059669' : '#475569'}
                       />
                     </View>
-                    <View
-                      style={[
-                        styles.prefBadge,
-                        isSelected && styles.prefBadgeSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.prefBadgeText,
-                          isSelected && styles.prefBadgeTextSelected,
-                        ]}
-                      >
-                        {opt.badge}
-                      </Text>
-                    </View>
+                    {isSelected && (
+                      <View style={styles.gridCheckmark}>
+                        <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                      </View>
+                    )}
                   </View>
 
                   <Text
                     style={[
-                      styles.prefTitle,
-                      isSelected && styles.prefTitleSelected,
+                      styles.gridTitle,
+                      isSelected && styles.gridTitleSelected,
                     ]}
                   >
                     {opt.title}
                   </Text>
-                  <Text style={styles.prefDesc}>{opt.desc}</Text>
+                  <Text style={styles.gridDesc}>{opt.desc}</Text>
 
-                  {isSelected && (
-                    <View style={styles.activeCheckmark}>
-                      <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                    </View>
-                  )}
+                  <View
+                    style={[
+                      styles.gridBadge,
+                      isSelected && styles.gridBadgeSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.gridBadgeText,
+                        isSelected && styles.gridBadgeTextSelected,
+                      ]}
+                    >
+                      {opt.badge}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
           </View>
         </View>
 
-        {/* Find Routes Button */}
+        {/* EV Sustainability Promotional Card */}
+        <View style={styles.sustainabilityCard}>
+          <Image
+            source={require('../../assets/images/sustainability_card.png')}
+            style={styles.sustainabilityImage}
+            resizeMode="cover"
+          />
+          <View style={styles.sustainabilityOverlay}>
+            <View style={styles.sustainabilityBadge}>
+              <Ionicons name="leaf" size={12} color="#059669" />
+              <Text style={styles.sustainabilityBadgeText}>EV Sustainability</Text>
+            </View>
+            <Text style={styles.sustainabilityTitle}>Drive Green,{`\n`}Save the Planet</Text>
+            <Text style={styles.sustainabilitySub}>
+              Every EV km saves ~120g CO₂ vs. petrol vehicles
+            </Text>
+          </View>
+        </View>
+
+        {/* Find Route Button (Green Accent Pill) */}
         <TouchableOpacity
-          style={styles.findRoutesButton}
+          style={styles.findRouteButton}
           onPress={handleFindRoutes}
           activeOpacity={0.85}
         >
-          <Ionicons name="navigate" size={20} color="#FFFFFF" />
-          <Text style={styles.findRoutesButtonText}>Find Routes</Text>
+          <Text style={styles.findRouteButtonText}>Find Route</Text>
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Saved Places Modal */}
+      <Modal
+        visible={savedPlacesModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSavedPlacesModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => {
+            setSavedPlacesModalVisible(false);
+            setEditingPlaceKey(null);
+          }}
+        >
+          <View
+            style={styles.savedPlacesSheet}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.savedPlacesHeader}>
+              <View>
+                <Text style={styles.savedPlacesTitle}>Saved Places</Text>
+                <Text style={styles.savedPlacesSub}>
+                  Select to route immediately or edit destination
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setSavedPlacesModalVisible(false);
+                  setEditingPlaceKey(null);
+                }}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {savedPlaces &&
+                ['home', 'work', 'other'].map((key) => {
+                  const place = savedPlaces[key];
+                  if (!place) return null;
+                  const isEditing = editingPlaceKey === key;
+
+                  return (
+                    <View key={key} style={styles.savedPlaceCard}>
+                      <View style={styles.savedPlaceRow}>
+                        <View style={styles.savedPlaceIconWrap}>
+                          <Ionicons
+                            name={
+                              key === 'home'
+                                ? 'home'
+                                : key === 'work'
+                                ? 'briefcase'
+                                : 'star'
+                            }
+                            size={20}
+                            color="#059669"
+                          />
+                        </View>
+
+                        <TouchableOpacity
+                          style={{ flex: 1 }}
+                          onPress={() => handleChooseSavedPlace(place)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.savedPlaceLabel}>{place.label}</Text>
+                          <Text style={styles.savedPlaceAddress} numberOfLines={2}>
+                            {place.address || 'Tap edit to set address'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.editPlaceBtn}
+                          onPress={() => {
+                            if (isEditing) {
+                              setEditingPlaceKey(null);
+                            } else {
+                              setEditingPlaceKey(key);
+                              setEditPlaceAddress(place.address || '');
+                              setEditPlaceCoords({
+                                latitude: place.latitude,
+                                longitude: place.longitude,
+                              });
+                            }
+                          }}
+                        >
+                          <Ionicons
+                            name={isEditing ? 'close' : 'pencil'}
+                            size={16}
+                            color="#059669"
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Inline Edit Form for this Place */}
+                      {isEditing && (
+                        <View style={styles.editPlaceSection}>
+                          <Text style={styles.editPlaceHeading}>Search & Set Location:</Text>
+                          <TextInput
+                            style={styles.editPlaceInput}
+                            placeholder="Type address or landmark..."
+                            placeholderTextColor="#94A3B8"
+                            value={editPlaceAddress}
+                            onChangeText={(text) => handleLocationQuery('editSavedPlace', text)}
+                          />
+
+                          {activeSearchField === 'editSavedPlace' && suggestions.length > 0 && (
+                            <View style={styles.suggestionsDropdown}>
+                              {suggestions.map((item) => (
+                                <TouchableOpacity
+                                  key={item.id}
+                                  style={styles.suggestionItem}
+                                  onPress={() => handleSelectSuggestion(item)}
+                                >
+                                  <Ionicons name="location-outline" size={16} color="#059669" />
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.suggestionTitle}>{item.name}</Text>
+                                    <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                                      {item.displayName}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+
+                          <TouchableOpacity
+                            style={styles.savePlaceActionBtn}
+                            onPress={() => handleSavePlaceEdit(key)}
+                          >
+                            <Text style={styles.savePlaceActionText}>Save Place</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Hamburger Drawer Menu Modal */}
       <Modal
@@ -422,7 +982,6 @@ export default function RoutePlanningScreen({ navigation, route }) {
             </View>
 
             <View style={styles.drawerItems}>
-              {/* Profile */}
               <TouchableOpacity
                 style={styles.drawerItem}
                 onPress={() => {
@@ -440,7 +999,6 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
-              {/* Activity */}
               <TouchableOpacity
                 style={styles.drawerItem}
                 onPress={() => {
@@ -458,7 +1016,6 @@ export default function RoutePlanningScreen({ navigation, route }) {
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
-              {/* About */}
               <TouchableOpacity
                 style={styles.drawerItem}
                 onPress={() => {
@@ -479,7 +1036,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
 
             <View style={styles.drawerFooter}>
               <Text style={styles.drawerFooterVersion}>Electrike EV Navigator v1.0</Text>
-              <Text style={styles.drawerFooterSub}>Intelligent Thermal-Aware Routing</Text>
+              <Text style={styles.drawerFooterSub}>Hyderabad Metro Edition</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -574,7 +1131,7 @@ export default function RoutePlanningScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFAF7', // Warm off-white
   },
   topBar: {
     flexDirection: 'row',
@@ -582,20 +1139,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAF7',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
+    borderBottomColor: '#EBEBE6',
     zIndex: 10,
   },
   iconButton: {
     padding: 7,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F1F1EC',
   },
   vehiclePill: {
     flexDirection: 'row',
@@ -623,16 +1175,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: 0.5,
   },
   pageSubtitle: {
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: '600',
     color: '#64748B',
-    marginTop: 3,
-    lineHeight: 18,
+    marginTop: 2,
   },
   tripCard: {
     backgroundColor: '#FFFFFF',
@@ -747,6 +1299,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#059669',
   },
+  suggestionsDropdown: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginHorizontal: 34,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 99,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  suggestionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  suggestionSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  searchingIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 34,
+    marginTop: 4,
+  },
+  searchingText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '600',
+  },
   preferenceSection: {
     marginBottom: 24,
   },
@@ -759,12 +1357,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  preferenceGrid: {
-    gap: 10,
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  preferenceCard: {
+  gridCard: {
+    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
@@ -775,86 +1377,183 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
-    position: 'relative',
+    justifyContent: 'space-between',
+    minHeight: 140,
   },
-  preferenceCardSelected: {
+  gridCardSelected: {
     borderColor: '#10B981',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#ECFDF5',
   },
-  prefTopRow: {
+  gridTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  prefIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  gridIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  prefIconWrapSelected: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+  gridIconWrapSelected: {
+    backgroundColor: '#D1FAE5',
   },
-  prefBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+  gridCheckmark: {
+    alignSelf: 'flex-start',
   },
-  prefBadgeSelected: {
-    backgroundColor: '#10B981',
-  },
-  prefBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  prefBadgeTextSelected: {
-    color: '#FFFFFF',
-  },
-  prefTitle: {
+  gridTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
+    marginBottom: 2,
   },
-  prefTitleSelected: {
+  gridTitleSelected: {
     color: '#065F46',
   },
-  prefDesc: {
-    fontSize: 12,
+  gridDesc: {
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 15,
+    marginBottom: 8,
   },
-  activeCheckmark: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+  gridBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
   },
-  findRoutesButton: {
+  gridBadgeSelected: {
+    backgroundColor: '#10B981',
+  },
+  gridBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  gridBadgeTextSelected: {
+    color: '#FFFFFF',
+  },
+  findRouteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#059669', // Brand green
     borderRadius: 16,
     paddingVertical: 16,
-    shadowColor: '#0F172A',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 5,
   },
-  findRoutesButtonText: {
+  findRouteButtonText: {
     fontSize: 16,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  savedPlacesSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  savedPlacesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  savedPlacesTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  savedPlacesSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  savedPlaceCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  savedPlaceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  savedPlaceIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  savedPlaceLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  savedPlaceAddress: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  editPlaceBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+  },
+  editPlaceSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  editPlaceHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  editPlaceInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  savePlaceActionBtn: {
+    backgroundColor: '#059669',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  savePlaceActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   menuOverlay: {
     flex: 1,
@@ -951,6 +1650,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
+  sheetHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
   vehicleSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
@@ -962,14 +1669,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 14,
   },
   sheetHeaderRow: {
     marginBottom: 16,
@@ -1054,5 +1753,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  // Sustainability Card
+  sustainabilityCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 14,
+    height: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  sustainabilityImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  sustainabilityOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.52)',
+    padding: 18,
+    justifyContent: 'flex-end',
+  },
+  sustainabilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  sustainabilityBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  sustainabilityTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  sustainabilitySub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.82)',
+    letterSpacing: 0.1,
   },
 });

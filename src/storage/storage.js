@@ -8,6 +8,7 @@ const KEYS = {
   BATTERY: '@electrike_battery',
   ACTIVE_VEHICLE_ID: '@electrike_active_vehicle_id',
   STATION_REVIEWS: '@electrike_station_reviews',
+  SAVED_PLACES: '@electrike_saved_places',
 };
 
 // Default initial profile
@@ -18,6 +19,37 @@ export const DEFAULT_PROFILE = {
   vehicleMake: 'Tata',
   vehicleModel: 'Nexon EV Max',
   numberPlate: 'KA 01 EV 2026',
+};
+
+// Default saved places (Home, Work, Other)
+export const DEFAULT_SAVED_PLACES = {
+  home: {
+    id: 'home',
+    label: 'Home',
+    icon: 'home',
+    name: 'Home Residence',
+    address: 'Jubilee Hills, Road No. 36, Hyderabad',
+    latitude: 17.4325,
+    longitude: 78.4020,
+  },
+  work: {
+    id: 'work',
+    label: 'Work',
+    icon: 'briefcase',
+    name: 'Cyber Gateway',
+    address: 'HITEC City, Madhapur, Hyderabad',
+    latitude: 17.4485,
+    longitude: 78.3780,
+  },
+  other: {
+    id: 'other',
+    label: 'Other',
+    icon: 'star',
+    name: 'Financial Club',
+    address: 'Gachibowli, Financial District, Hyderabad',
+    latitude: 17.4401,
+    longitude: 78.3489,
+  },
 };
 
 // Default initial vehicles list (only ONE active by default)
@@ -329,6 +361,36 @@ export async function saveTrip(trip) {
   }
 }
 
+/**
+ * Fetch saved places (Home, Work, Other)
+ */
+export async function getSavedPlaces() {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.SAVED_PLACES);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_SAVED_PLACES, ...parsed };
+    }
+    return DEFAULT_SAVED_PLACES;
+  } catch (error) {
+    console.error('Error reading saved places from AsyncStorage:', error);
+    return DEFAULT_SAVED_PLACES;
+  }
+}
+
+/**
+ * Save saved places
+ */
+export async function saveSavedPlaces(places) {
+  try {
+    await AsyncStorage.setItem(KEYS.SAVED_PLACES, JSON.stringify(places));
+    return true;
+  } catch (error) {
+    console.error('Error saving saved places to AsyncStorage:', error);
+    return false;
+  }
+}
+
 export default {
   getProfile,
   saveProfile,
@@ -343,6 +405,9 @@ export default {
   saveStationReview,
   getTrips,
   saveTrip,
+  getSavedPlaces,
+  saveSavedPlaces,
   DEFAULT_PROFILE,
   DEFAULT_VEHICLES,
+  DEFAULT_SAVED_PLACES,
 };
